@@ -29,6 +29,8 @@ local settingStatus = {
 local OPEN_LENGTH = 8
 local MENU_BUTTON_MASK = (D_JPAD | U_JPAD | R_JPAD | L_JPAD | L_TRIG | R_TRIG)
 
+-- UTIL
+
 local function render_interpolated_rect(x, y, width, height)
     djui_hud_render_rect_interpolated(x - menu.interpX, y, width, height, x, y, width, height)
 end
@@ -39,6 +41,9 @@ local function render_interpolated_texture(texInfo, x, y, scaleW, scaleH)
     djui_hud_render_texture_interpolated(texInfo, x - menu.interpX, y, scaleW, scaleH, x, y, scaleW, scaleH)
 end
 
+-- TEXTURES
+
+local TEX_PAD_R = get_texture_info('pad_right')
 
 ---@param m MarioState
 hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
@@ -67,23 +72,20 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
             elseif buttonPressed & R_JPAD ~= 0 then
                 -- select
                 if menu.curTab == 0 then
-                    -- if the selected pet is different from the active pet
-                    if menu.curPet ~= gPlayerSyncTable[0].activePet then
-                        spawn_player_pet(m, menu.curPet)
-                    else
-                        local altModels = petAltModels[menu.curPet]
+                    local petIndex = menu.curPet
+                    local altIndex = 0
+
+                    -- if the selected pet is the already active pet
+                    if petIndex == gPlayerSyncTable[0].activePet then
+                        local altModels = petAltModels[petIndex]
                         if altModels then
                             -- fix nil
-                            local alt = gPlayerSyncTable[0].activePetAlt or 0
-                            alt = alt + 1
-                            if alt > #altModels then alt = 0 end
-
-                            -- change the sync table value
-                            gPlayerSyncTable[0].activePetAlt = alt
-                        else
-                            gPlayerSyncTable[0].activePetAlt = nil
+                            altIndex = gPlayerSyncTable[0].activePetAlt or 0
+                            altIndex = altIndex + 1
+                            if altIndex > #altModels then altIndex = 0 end
                         end
                     end
+                    spawn_player_pet(m, petIndex, altIndex)
                 elseif network_is_server() then
                     local key = settings[menu.curSetting].key
                     gGlobalSyncTable[key] = gGlobalSyncTable[key] + 1
@@ -133,16 +135,18 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
     end
 end)
 
+local TEX_SML = 0.25
+local TEX_MED = 0.35
+local TEX_LRG = 0.5
 
 local function render_pet_menu()
-    djui_hud_set_resolution(RESOLUTION_DJUI)
+    djui_hud_set_resolution(RESOLUTION_N64)
     djui_hud_set_font(FONT_NORMAL)
 
-    local bgWidth = max(256, djui_hud_get_screen_width() * 0.25)
+    local bgWidth = 120
     local bgHeight = djui_hud_get_screen_height() * 0.6
-    local bgX = -bgWidth + (8 - -bgWidth) * math.sqrt(menu.openTimer / OPEN_LENGTH)
-    local bgY = djui_hud_get_screen_height() - bgHeight - 8
-    local scale = 1.5
+    local bgX = -bgWidth + (2 - -bgWidth) * math.sqrt(menu.openTimer / OPEN_LENGTH)
+    local bgY = djui_hud_get_screen_height() - bgHeight - 2
     -- use this variable as an x diff
     menu.interpX = bgX - menu.interpX
 
@@ -150,28 +154,28 @@ local function render_pet_menu()
     render_interpolated_rect(bgX, bgY, bgWidth, bgHeight)
 
     djui_hud_set_color(255, 255, 255, 255)
-    render_interpolated_text("WiddlePets v1.0", bgX + 16, bgY + 8, scale)
-    render_interpolated_rect(bgX + 8, bgY + 52, bgWidth - 16, 3)
+    render_interpolated_text("WiddlePets v1.0", bgX + 4, bgY + 2, TEX_MED)
+    render_interpolated_rect(bgX + 2, bgY + 12, bgWidth - 4, 1)
 
     if menu.curTab == 0 then
         -- pets tab
-        render_interpolated_text("Pets", bgX + bgWidth - 160, bgY + 2, 1.0)
+        render_interpolated_text("Pets", bgX + bgWidth - 44, bgY + 2, TEX_SML)
         djui_hud_set_color(255, 255, 255, 150)
-        render_interpolated_text("Settings", bgX + bgWidth - 96, bgY + 12, 1.0)
+        render_interpolated_text("Settings", bgX + bgWidth - 24, bgY + 4, TEX_SML)
         for i = menu.upperPet, menu.upperPet + menu.listSize, 1 do
             if i > #petTable then break end
             -- set colors for options + selector icon
             local name
             if petTable[i] then name = petTable[i].name else name = "[NONE]" end
-            local x = bgX + 24
-            local y = bgY + 64 + (i - menu.upperPet)*48
+            local x = bgX + 8
+            local y = bgY + 16 + (i - menu.upperPet)*12
 
             if menu.curPet == i then
                 djui_hud_set_color(255, 255, 255, 255)
-                local cursorX = bgX + bgWidth - 24
+                local cursorX = bgX + bgWidth - 8
                 local prevY = y
-                if menu.scrollDirFull == 0 then prevY = y - (menu.scrollDir*48) end
-                djui_hud_print_text_interpolated(">", cursorX - menu.interpX, prevY - 12, 2.0, cursorX, y - 12, 2.0)
+                if menu.scrollDirFull == 0 then prevY = y - (menu.scrollDir*12) end
+                djui_hud_print_text_interpolated(">", cursorX - menu.interpX, prevY - 4, TEX_LRG, cursorX, y - 4, TEX_LRG)
             else
                 djui_hud_set_color(150, 150, 150, 255)
             end
@@ -179,24 +183,25 @@ local function render_pet_menu()
                 djui_hud_set_color(50, 255, 50, 255)
 
                 if petAltModels[i] then
-                    render_interpolated_text((gPlayerSyncTable[0].activePetAlt+1) .. "/" .. (#petAltModels[i]+1), bgX + bgWidth - 88, y + 12, 1)
+                    render_interpolated_text((gPlayerSyncTable[0].activePetAlt+1) .. "/" .. (#petAltModels[i]+1), bgX + bgWidth - 20, y + 2, TEX_SML)
                 end
             end
 
-            local prevY = y - menu.scrollDirFull*48
-            djui_hud_print_text_interpolated(name, x - menu.interpX, prevY, scale, x, y, scale)
+            local prevY = y - menu.scrollDirFull*12
+            djui_hud_print_text_interpolated(name, x - menu.interpX, prevY, TEX_MED, x, y, TEX_MED)
         end
-        --if #petTable > menu.listSize then
-            -- scroll bar
-            local startY = bgY + 75
-            local endY = startY + (menu.listSize+1)*48
+        -- scroll bar
+        do
+            local startY = bgY + 16
+            local endY = startY + (menu.listSize+1)*12
             local height = (endY - startY) / #petTable
             djui_hud_set_color(255, 255, 255, 50)
-            render_interpolated_rect(bgX + 6, startY - 2, 8, endY - startY + 4)
+            render_interpolated_rect(bgX + 2, startY - 1, 3, endY - startY + 2)
             djui_hud_set_color(255, 255, 255, 255)
             local yAB = endY - height - startY
-            djui_hud_render_rect_interpolated(bgX + 8 - menu.interpX, startY + yAB * ((menu.curPet - menu.scrollDir) / #petTable), 4, height, bgX + 8, startY + yAB * (menu.curPet / #petTable), 4, height)
-        --end
+            djui_hud_render_rect_interpolated(bgX + 3 - menu.interpX, startY + yAB * ((menu.curPet - menu.scrollDir) / #petTable), 1, height, bgX + 3, startY + yAB * (menu.curPet / #petTable), 1, height)
+        end
+
         if menu.curPet > 0 then
             djui_hud_set_color(200, 200, 200, 255)
             local desc = (petTable[menu.curPet].description or "A cool lil pet.") .. " "
@@ -211,55 +216,58 @@ local function render_pet_menu()
                     break
                 end
             end
-            render_interpolated_text(string.sub(desc, 1, splitIndex), bgX + 16, bgY + bgHeight - 112, 1.0)
-            render_interpolated_text(string.sub(desc, splitIndex+1), bgX + 16, bgY + bgHeight - 80, 1.0)
+            render_interpolated_text(string.sub(desc, 1, splitIndex), bgX + 4, bgY + bgHeight - 28, TEX_SML)
+            render_interpolated_text(string.sub(desc, splitIndex+1), bgX + 4, bgY + bgHeight - 20, TEX_SML)
 
             local credit = petTable[menu.curPet].credit or ""
-            render_interpolated_text(credit, bgX + bgWidth - djui_hud_measure_text(credit) - 16, bgY + bgHeight - 40, 1.0)
+            render_interpolated_text(credit, bgX + bgWidth - djui_hud_measure_text(credit)*TEX_SML - 2, bgY + bgHeight - 8, TEX_SML)
         end
     else
         -- settings tab
-        render_interpolated_text("Settings", bgX + bgWidth - 96, bgY + 2, 1.0)
+        render_interpolated_text("Settings", bgX + bgWidth - 24, bgY + 2, TEX_SML)
         djui_hud_set_color(255, 255, 255, 150)
-        render_interpolated_text("Pets", bgX + bgWidth - 160, bgY + 12, 1.0)
+        render_interpolated_text("Pets", bgX + bgWidth - 44, bgY + 4, TEX_SML)
 
         -- render differently for players who can change settings vs can't
         if network_is_server() then
             for i = 1, #settings, 1 do
                 local name = settings[i].name
-                local x = bgX + 24
-                local y = bgY + 64 + (i-1)*48
+                local x = bgX + 8
+                local y = bgY + 16 + (i-1)*12
 
                 if menu.curSetting == i then
                     djui_hud_set_color(255, 255, 255, 255)
-                    local cursorX = bgX + bgWidth - 24
-                    local prevY = y - (menu.scrollDir*48)
-                    djui_hud_print_text_interpolated(">", cursorX - menu.interpX, prevY - 12, 2, cursorX, y - 12, 2)
+                    local cursorX = bgX + bgWidth - 8
+                    local prevY = y - (menu.scrollDir*12)
+                    djui_hud_print_text_interpolated(">", cursorX - menu.interpX, prevY - 4, TEX_LRG, cursorX, y - 4, TEX_LRG)
                 else
                     djui_hud_set_color(150, 150, 150, 255)
                 end
 
-                render_interpolated_text(name, x, y, scale)
+                render_interpolated_text(name, x, y, TEX_MED)
                 local status = settingStatus[gGlobalSyncTable[settings[i].key]]
                 if status then
-                    render_interpolated_text(status, bgX + bgWidth - 38 - djui_hud_measure_text(status)*scale, y, scale)
+                    render_interpolated_text(status, bgX + bgWidth - 12 - djui_hud_measure_text(status)*TEX_MED, y, TEX_MED)
                 end
             end
         else
             djui_hud_set_color(150, 150, 150, 255)
             for i = 1, #settings, 1 do
                 local name = settings[i].name
-                local x = bgX + 24
-                local y = bgY + 64 + (i-1)*48
+                local x = bgX + 6
+                local y = bgY + 16 + (i-1)*12
 
-                render_interpolated_text(name, x, y, scale)
+                render_interpolated_text(name, x, y, TEX_MED)
                 local status = settingStatus[gGlobalSyncTable[settings[i].key]]
                 if status then
-                    render_interpolated_text(status, bgX + bgWidth - 38 - djui_hud_measure_text(status)*scale, y, scale)
+                    render_interpolated_text(status, bgX + bgWidth - 4 - djui_hud_measure_text(status)*TEX_MED, y, TEX_MED)
                 end
             end
         end
     end
+
+    djui_hud_set_color(0, 0, 0, 255)
+    djui_hud_render_rect(-512, 0, 512, djui_hud_get_screen_height())
 
     menu.interpX = bgX
     menu.scrollDir = 0
@@ -273,6 +281,10 @@ hook_event(HOOK_ON_HUD_RENDER, function ()
     elseif menu.openTimer > 0 then
         menu.openTimer = menu.openTimer - 1
         render_pet_menu()
+    else
+        djui_hud_set_color(255, 255, 255, 255)
+        djui_hud_set_resolution(RESOLUTION_N64)
+        djui_hud_render_texture(TEX_PAD_R, 4, djui_hud_get_screen_height() - 20, 1, 1)
     end
 end)
 

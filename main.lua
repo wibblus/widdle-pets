@@ -33,9 +33,9 @@ if not SM64COOPDX_VERSION then return end
 ---@field pos Vec3f|nil
 ---@field sample BassAudio|nil
 
----@type boolean
-local localPetActive = false
--- list of sample objects, indexed by globalPlayerIndex
+---@type Object|nil
+local activePetObj
+-- list of sample objects, indexed by local player index
 ---@type table<integer,PetSample>
 local gPetSamples = {}
 
@@ -63,8 +63,6 @@ petLocalSettings = {
     menuBind = R_JPAD,
 }
 
--- NOTES: kick and drop/throw are not synced. tpose when entering an area with an existing pet
-
 ---- API
 
 _G.wpets = {}
@@ -76,8 +74,9 @@ function wpets.add_pet(pet)
     if pet.animList == nil then
         pet.animList = {}
     end
-    -- sounds must be added using the dedicated function
-    pet.soundList = {}
+    if pet.soundList == nil then
+        pet.soundList = {}
+    end
 
     pet.scale = pet.scale or 1.0
     pet.yOffset = pet.yOffset or 0
@@ -108,32 +107,25 @@ function wpets.set_pet_sounds(i, sounds)
     petTable[i].soundList[3] = sounds.vanish or nil
     petTable[i].soundList[4] = sounds.step or nil
 
-    -- only hook the sample handler function if necessary
-    for key, value in pairs(sounds) do
-        if type(value) == 'table' then
-            for k, v in pairs(value) do
-                if type(v) == 'string' then goto samples end
-            end
-        elseif type(value) == 'string' then goto samples end
-    end
-    do return end
-
-    ::samples::
     -- hook sample handling; ensures that samples are loaded from the correct mod context
-    -- TODO: FUCK YOUUUUUUUUUU (edit: nevermind im so cool)
-    hook_event(HOOK_UPDATE, function ()
-        for index, sample in pairs(gPetSamples) do
-            -- name is only not nil when the sample should be played
-            if sample.name and gPlayerSyncTable[index].activePet == i then
-                local bass = audio_sample_load(sample.name)
-                audio_sample_play(bass, sample.pos, 1.0)
-                -- track the sample to destroy later
-                gPetSamples[index].sample = bass
-                gPetSamples[index].name = nil
-            end
-        end
-    end)
+    -- TODO: FUCK YOUUUUUUUUUU (edit: nevermind im so cool) (edit2: i will no longer use this hook method)
 end
+
+-- there could be a better way to do this /shrug
+---@param i integer
+function wpets.process_pet_samples(i)
+    for index, sample in pairs(gPetSamples) do
+        -- name is only not nil when the sample should be played
+        if sample.name and gPlayerSyncTable[index].activePet == i then
+            local bass = audio_sample_load(sample.name)
+            audio_sample_play(bass, sample.pos, 1.0)
+            -- track the sample to destroy later
+            gPetSamples[index].sample = bass
+            gPetSamples[index].name = nil
+        end
+    end
+end
+
 ---@param i integer
 ---@param field string
 ---@return any
@@ -170,6 +162,20 @@ function wpet_is_setting(key, mIndex, oIndex)
 end
 
 ---@param o Object
+---@param animID integer
+local function wpet_play_anim(o, animID)
+    local anim = petTable[o.oPetIndex].animList[animID] or petTable[o.oPetIndex].animList[0]
+    if anim then
+        smlua_anim_util_set_animation(o, anim)
+        o.header.gfx.animInfo.animYTrans = 2.0
+        o.header.gfx.animInfo.animFrame = 0
+    elseif petTable[o.oPetIndex].animPointer then
+        obj_init_animation(o, 0)
+        o.header.gfx.animInfo.animFrame = 0
+    end
+end
+
+---@param o Object
 ---@param action integer
 local function wpet_set_action(o, action)
     o.oAction = action
@@ -184,15 +190,7 @@ local function wpet_set_action(o, action)
     end
 
     -- animation handling
-    local anim = petTable[o.oPetIndex].animList[action+1] or petTable[o.oPetIndex].animList[0]
-    if anim then
-        smlua_anim_util_set_animation(o, anim)
-        o.header.gfx.animInfo.animYTrans = 2.0
-        o.header.gfx.animInfo.animFrame = 0
-    elseif petTable[o.oPetIndex].animPointer then
-        obj_init_animation(o, 0)
-        o.header.gfx.animInfo.animFrame = 0
-    end
+    wpet_play_anim(o, action+1)
 end
 
 ---@param o Object
@@ -214,7 +212,7 @@ local function wpet_play_sound(o, sound)
             play_sound(s, o.header.gfx.cameraToObject)
         elseif typ == 'string' then
             -- sample
-            local index = o.globalPlayerIndex
+            local index = network_local_index_from_global(o.globalPlayerIndex)
             if gPetSamples[index] and gPetSamples[index].sample then
                 audio_sample_destroy(gPetSamples[index].sample)
                 gPetSamples[index].sample = nil
@@ -233,34 +231,26 @@ local function wpet_modify(o, petIndex, altIndex)
     local pet = petTable[petIndex]
     if o == nil or pet == nil then return end
 
-    -- alt model handling
-    if altIndex and altIndex ~= 0 then
-        obj_set_model_extended(o, petAltModels[petIndex][altIndex])
-    else
-        obj_set_model_extended(o, pet.modelID)
-    end
     o.oPetIndex = petIndex
     o.oPetAlt = altIndex or 0
 
     obj_scale(o, pet.scale)
 
-    o.oAnimations = pet.animPointer or gObjectAnimations.bub_seg6_anims_06012354
+    o.oAnimations = pet.animPointer or gObjectAnimations.amp_seg8_anims_08004034
     obj_init_animation(o, 0)
     o.oGraphYOffset = pet.yOffset
 
     if pet.flying then o.oGravity = -0.1 else o.oGravity = -1.5 end
 
-    if o.oAction ~= WPET_ACT_IDLE or o.oHeldState ~= HELD_FREE then
-        o.header.gfx.node.flags = o.header.gfx.node.flags | GRAPH_RENDER_INVISIBLE
-        wpet_set_action(o, WPET_ACT_TELEPORT)
-    else
-        o.oPosY = o.oPosY + 30
+    o.header.gfx.node.flags = o.header.gfx.node.flags | GRAPH_RENDER_INVISIBLE
+    wpet_set_action(o, WPET_ACT_TELEPORT)
 
-        spawn_mist_particles()
-        wpet_play_sound(o, 1)
-
-        wpet_set_action(o, WPET_ACT_IDLE)
+    if o.oAction == WPET_ACT_IDLE and o.oHeldState == HELD_FREE then
+        o.oPetActTimer = 1
     end
+
+    -- sync
+    network_send_object(o, true)
 end
 
 ---@param m MarioState
@@ -270,7 +260,7 @@ end
 
 ---@param m MarioState
 ---@param petIndex? integer
-function spawn_player_pet(m, petIndex)
+function spawn_player_pet(m, petIndex, altIndex)
     -- true if the supplied pet index is different from the active pet index
     local isPetChanged = false
     if petIndex then
@@ -282,41 +272,31 @@ function spawn_player_pet(m, petIndex)
     local pet = petTable[petIndex]
     if not pet then return despawn_player_pet(m) end -- if pet is nil
 
-    local alt = gPlayerSyncTable[m.playerIndex].activePetAlt or 0
-    if not petAltModels[petIndex] or isPetChanged then alt = 0 end
-    gPlayerSyncTable[m.playerIndex].activePetAlt = alt
+    if not altIndex then
+        altIndex = gPlayerSyncTable[m.playerIndex].activePetAlt or 0
+    end
+    if not petAltModels[petIndex] or isPetChanged then altIndex = 0 end
+    gPlayerSyncTable[m.playerIndex].activePetAlt = altIndex
 
-    -- stop if a pet object already exists for this player; pet behaviour code will call wpet_modify and handle the rest
-    if localPetActive then return end
-
-    localPetActive = true
+    -- stop if a pet object already exists for this player
+    if activePetObj and get_id_from_behavior(activePetObj.behavior) == id_bhvWPet then
+        return wpet_modify(activePetObj, petIndex, altIndex)
+    end
 
     -- spawn the pet object and init stuff
     ---@param o Object
-    spawn_sync_object(id_bhvWPet, pet.modelID, m.pos.x, m.pos.y, m.pos.z, function (o)
+    local obj = spawn_sync_object(id_bhvWPet, pet.modelID, m.pos.x, m.pos.y, m.pos.z, function (o)
         -- match owner player index ; uses global index for matching recolors
         o.globalPlayerIndex = m.marioObj.globalPlayerIndex
-
-        -- alt model handling
-        if alt ~= 0 then
-            obj_set_model_extended(o, petAltModels[petIndex][alt])
-        end
-        o.oPetAlt = alt or 0
-
-        -- sync these values
-        network_init_object(o, true, {'oPetIndex', 'oPetActTimer', 'oPetAreaId', 'oPetAlt'})
         o.oPetIndex = petIndex
-        o.oPetAreaId = gNetworkPlayers[m.playerIndex].currLevelAreaSeqId
+        o.oPetAlt = altIndex or 0
 
-        obj_scale(o, pet.scale)
-
-        o.oAnimations = pet.animPointer or gObjectAnimations.bub_seg6_anims_06012354
-        o.oGraphYOffset = pet.yOffset
-
+        -- initial spawn action
         o.header.gfx.node.flags = o.header.gfx.node.flags | GRAPH_RENDER_INVISIBLE
         o.oIntangibleTimer = -1
         wpet_set_action(o, WPET_ACT_TELEPORT)
     end)
+    activePetObj = obj
 end
 
 ---- HOOKED FUNCTIONS
@@ -337,6 +317,11 @@ local function mario_update(m)
                 dist = clampf(dist, 45, 100)
                 m.pos.x = o.oPosX - sins(m.faceAngle.y)*dist
                 m.pos.z = o.oPosZ - coss(m.faceAngle.y)*dist
+
+                if o.oAction ~= WPET_ACT_PETTED then
+                    wpet_set_action(o, WPET_ACT_PETTED)
+                    network_send_object(o, false)
+                end
             end
         end
     end
@@ -406,7 +391,7 @@ local function on_sync_valid()
     local m = gMarioStates[0]
     if gPlayerSyncTable[0].activePet and m.area.camera then
         -- when loading a new area, the activePetObj reference changes; reset it
-        localPetActive = false
+        activePetObj = nil
         spawn_player_pet(m)
     end
 end
@@ -416,51 +401,66 @@ hook_event(HOOK_ON_SYNC_VALID, on_sync_valid)
 
 ---@param o Object
 local function bhv_wpet_init(o)
-    cur_obj_set_hitbox_radius_and_height(35.0, 50.0)
-    cur_obj_set_hurtbox_radius_and_height(20.0, 50.0)
+    o.oFlags = OBJ_FLAG_UPDATE_GFX_POS_AND_ANGLE | OBJ_FLAG_HOLDABLE
 
-    cur_obj_scale(petTable[o.oPetIndex].scale)
+    local pet = petTable[o.oPetIndex]
+
+    -- alt model handling
+    if o.oPetAlt ~= 0 then
+        obj_set_model_extended(o, petAltModels[o.oPetIndex][o.oPetAlt])
+    end
+
+    -- track spawn level-area to despawn when owner player leaves
+    o.oPetAreaId = gNetworkPlayers[network_local_index_from_global(o.globalPlayerIndex)].currLevelAreaSeqId
+
+    -- default animation pointer; ensures that anims play properly
+    o.oAnimations = pet.animPointer or gObjectAnimations.amp_seg8_anims_08004034
     obj_init_animation(o, 0)
 
-    o.oFlags = OBJ_FLAG_UPDATE_GFX_POS_AND_ANGLE | OBJ_FLAG_HOLDABLE
+    o.oGraphYOffset = pet.yOffset
+
+    obj_scale(o, pet.scale)
     o.oInteractType = INTERACT_GRABBABLE
+    o.hitboxRadius = 35
+    o.hitboxHeight = 50
+    o.hurtboxRadius = 25
+    o.hurtboxHeight = 50
+    o.hitboxDownOffset = 0
+
     o.oInteractionSubtype = INT_SUBTYPE_KICKABLE
 
-    --o.allowRemoteInteractions = 1
+    -- flying type pet gravity
+    if pet.flying then o.oGravity = -0.1 else o.oGravity = -1.5 end
 
-    if petTable[o.oPetIndex].flying then o.oGravity = -0.1 else o.oGravity = -1.5 end
-
+    -- physics
     o.oBounciness       = 1.0
     o.oDragStrength     = 5.0
     o.oFriction         = 0.9
     o.oBuoyancy         = 0.0
-
     o.oWallHitboxRadius = 25.0
 
     o.oForwardVel = 0.0
+
+    -- sync these values
+    network_init_object(o, true, {'oPetIndex', 'oPetActTimer', 'oPetAreaId', 'oPetAlt', 'oHeldState', 'oInteractStatus'})
 end
 
 ---@type table<integer,fun(o:Object,m:MarioState,dist?:number,targetAngle?:number)>
 local wpet_actions = {
     [WPET_ACT_IDLE] = function (o, m, dist, targetAngle)
         o.oForwardVel = approach_f32_symmetric(o.oForwardVel, 0.0, 0.5)
+
         if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 then
             -- flying pet / swimming
-
             o.oVelY = clampf((m.pos.y + 80 - o.oPosY) * 0.03, -5.0, 5.0)
         else
             -- walking pet
-
             if o.oMoveFlags & OBJ_MOVE_ON_GROUND ~= 0 then o.oVelY = 0.0 end
         end
 
         local yDist = math.abs(m.pos.y - o.oPosY)
 
-        for i = 0, 15, 1 do
-            if gMarioStates[i].action == ACT_PETTING and gMarioStates[i].actionArg == o.globalPlayerIndex then
-                return wpet_set_action(o, WPET_ACT_PETTED)
-            end
-        end
+
         if danceActs[m.action] then
             return wpet_set_action(o, WPET_ACT_DANCE)
         end
@@ -547,6 +547,7 @@ local wpet_actions = {
         o.oPetActTimer = o.oPetActTimer + 1
         if o.oPetActTimer == 1 then
             wpet_play_sound(o, 2)
+            wpet_play_anim(o, 3)
         end
 
         -- nice
@@ -585,8 +586,8 @@ local wpet_actions = {
         local z = m.pos.z + coss(spawnAngle) * 100
         local y = m.pos.y + 50.0
         ]]
-        local x = m.pos.x + sins(m.faceAngle.y - 0x4000) * 100.0
-        local z = m.pos.z + coss(m.faceAngle.y - 0x4000) * 100.0
+        local x = m.pos.x + sins(m.faceAngle.y + 0x4000) * 100.0
+        local z = m.pos.z + coss(m.faceAngle.y + 0x4000) * 100.0
         local y = m.pos.y + 50.0
 
         o.oForwardVel = 0
@@ -594,17 +595,30 @@ local wpet_actions = {
         -- check for a valid floor in the spawn pos and skip if not valid
         if math.abs(find_floor_height(x, y, z) - m.pos.y) > 200 then return end
 
-        o.oPosX = x
-        o.oPosY = y
-        o.oPosZ = z
-        o.oFaceAngleYaw = m.faceAngle.y
+        if o.oPetActTimer == 0 then
+            o.oPosX = x
+            o.oPosY = y
+            o.oPosZ = z
+            o.oFaceAngleYaw = m.faceAngle.y
+        else
+            -- used when pet is already idle and not being held
+            o.oPosY = o.oPosY + 30
+        end
         o.oMoveFlags = OBJ_MOVE_IN_AIR
+
+        -- model handling
+        if o.oPetAlt ~= 0 then
+            obj_set_model_extended(o, petAltModels[o.oPetIndex][o.oPetAlt])
+        else
+            obj_set_model_extended(o, petTable[o.oPetIndex].modelID)
+        end
+        o.oAnimations = petTable[o.oPetIndex].animPointer or gObjectAnimations.amp_seg8_anims_08004034
 
         o.header.gfx.node.flags = o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE
         cur_obj_become_tangible()
 
         spawn_mist_particles()
-        if o.oPetActTimer == 0 then wpet_play_sound(o, 1) end
+        wpet_play_sound(o, 1)
 
         if exitActs[m.action] then
             o.oForwardVel = m.forwardVel
@@ -618,7 +632,7 @@ local wpet_actions = {
         spawn_mist_particles_with_sound(SOUND_GENERAL_VANISH_SFX)
         wpet_play_sound(o, 3)
         obj_mark_for_deletion(o)
-        if m.playerIndex == 0 then localPetActive = false end
+        if m.playerIndex == 0 then activePetObj = nil end
     end,
 }
 
@@ -688,10 +702,6 @@ local function bhv_wpet_loop(o)
 
         wpet_set_action(o, WPET_ACT_IDLE)
     end
-
-    if gPlayerSyncTable[m.playerIndex].activePet ~= o.oPetIndex or gPlayerSyncTable[m.playerIndex].activePetAlt ~= o.oPetAlt then
-        wpet_modify(o, gPlayerSyncTable[m.playerIndex].activePet, gPlayerSyncTable[m.playerIndex].activePetAlt)
-    end
     -- despawn if the owner player should not have a pet OR player has left the pet's area
     if gPlayerSyncTable[m.playerIndex].activePet == nil or o.oPetAreaId ~= gNetworkPlayers[m.playerIndex].currLevelAreaSeqId then
         wpet_set_action(o, WPET_ACT_DESPAWN)
@@ -715,7 +725,7 @@ hook_event(HOOK_ON_HUD_RENDER, function ()
     for i = 0, MAX_PLAYERS-1, 1 do
         y = y + 48
         if gPetSamples[i] and gPetSamples[i].sample then
-            djui_hud_print_text(i .. " : " .. (gPetSamples[i].sample.file.relativePath or ""), 64, y, 2.0)
+            --djui_hud_print_text(i .. " : " .. (gPetSamples[i].sample.file.relativePath or ""), 64, y, 1.0)
         end
     end
 end)
