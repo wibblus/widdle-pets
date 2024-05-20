@@ -417,42 +417,32 @@ local E_MODEL_HEADPHONE_GOOMBA = smlua_model_util_get_id('hp_goomba_geo')
 local E_MODEL_MOOGLE = smlua_model_util_get_id('mog_geo')
 local E_MODEL_CHOCO = smlua_model_util_get_id('choco_geo')
 
-local ID_HPG = _G.wpets.add_pet({name = "HeadphoneGoomba", credit = "wibblus, Nintendo",
+local ID_HPG = _G.wpets.add_pet({name = "Headphone Goomba", credit = "wibblus, Nintendo",
 	description = "his tunes are the best in the mushroom kingdom.",
 	modelID = E_MODEL_HEADPHONE_GOOMBA,
-	scale = 0.725, yOffset = 3})
+	scale = 0.725, yOffset = 3 })
 _G.wpets.set_pet_anims(ID_HPG, {idle = 'hp_goob_idle', follow = 'hp_goob_follow', petted = 'hp_goob_petted', dance = 'hp_goob_dance'})
 _G.wpets.set_pet_sounds(ID_HPG, {spawn = 'goob_spawn.ogg', happy = 'goob_happy.ogg', step = SOUND_OBJ_GOOMBA_WALK})
 
 local ID_MOG = _G.wpets.add_pet({name = "Moogle", credit = "wibblus, Square",
 	description = "kupo!",
 	modelID = E_MODEL_MOOGLE,
-	scale = 1.0, flying = true})
+	scale = 1.0, flying = true })
 _G.wpets.set_pet_anims(ID_MOG, {idle = 'wing_idle', follow = 'wing_follow', petted = 'wing_petted', dance = 'wing_dance'})
 _G.wpets.set_pet_sounds(ID_MOG, {spawn = SOUND_OBJ_WIGGLER_HIGH_PITCH, happy = SOUND_OBJ_WIGGLER_TALK})
 
 local ID_CHOCO = _G.wpets.add_pet({name = "Chocobo", credit = "wibblus, Square",
 	description = "This eager little friend smells of Gyasahl Greens.",
 	modelID = E_MODEL_CHOCO,
-	scale = 0.95})
+	scale = 0.95 })
 _G.wpets.set_pet_anims(ID_CHOCO, {idle = '2leg_idle', follow = '2leg_follow', petted = '2leg_petted', dance = '2leg_dance'})
 _G.wpets.set_pet_sounds(ID_CHOCO, {spawn = SOUND_OBJ_MIPS_RABBIT, happy = SOUND_OBJ_MIPS_RABBIT, step = SOUND_OBJ_UKIKI_STEP_DEFAULT})
 
 
 -- builtin model examples
 
-_G.wpets.add_pet({name = 'BobombBuddy', modelID = E_MODEL_BOBOMB_BUDDY, animPointer = gObjectAnimations.bobomb_seg8_anims_0802396C, scale = 0.5, yOffset = 0, credit = 'Nintendo',
-	soundList = {SOUND_OBJ_BOBOMB_BUDDY_TALK},
-	animList = {}})
-_G.wpets.add_pet({name = 'ChainChomp', modelID = E_MODEL_CHAIN_CHOMP, animPointer = gObjectAnimations.chain_chomp_seg6_anims_06025178, scale = 0.2, yOffset = 32, credit = 'Nintendo',
-	soundList = {SOUND_GENERAL_CHAIN_CHOMP2},
-	animList = {}})
-
-for i = 1, 12, 1 do
-	_G.wpets.add_pet({name = 'Goomba ' .. tostring(i), modelID = E_MODEL_GOOMBA, animPointer = gObjectAnimations.goomba_seg8_anims_0801DA4C, scale = 0.8, yOffset = 0, credit = 'Nintendo',
-		soundList = {SOUND_OBJ_GOOMBA_ALERT},
-		animList = {}})
-end
+_G.wpets.add_pet({name = 'Bob-omb Buddy', modelID = E_MODEL_BOBOMB_BUDDY, animPointer = gObjectAnimations.bobomb_seg8_anims_0802396C, scale = 0.5, yOffset = 0, credit = 'Nintendo',
+	soundList = {SOUND_OBJ_BOBOMB_BUDDY_TALK}})
 
 -- required hook for sounds
 hook_event(HOOK_UPDATE, function ()

@@ -52,15 +52,16 @@ local SETTING_OFF = 0
 local SETTING_OWNER = 1
 local SETTING_ALL = 2
 
+-- global/server settings
 if network_is_server() then
     gGlobalSyncTable.grabAllowed = mod_storage_load_number('grabAllowed') or SETTING_ALL
     gGlobalSyncTable.throwAllowed = mod_storage_load_number('throwAllowed') or SETTING_OFF
     gGlobalSyncTable.kickAllowed = mod_storage_load_number('kickAllowed') or SETTING_OFF
 end
 
+-- local player settings
 petLocalSettings = {
     petBind = Y_BUTTON,
-    menuBind = R_JPAD,
 }
 
 ---- API
@@ -144,7 +145,7 @@ end
 
 ---- WPET BEHAVIOR SETUP
 
-define_custom_obj_fields({oPetIndex = 'u32', oPetAlt = 'u32', oPetActTimer = 'u32', oPetAreaId = 'u32'})
+define_custom_obj_fields({oPetIndex = 'u32', oPetAlt = 'u32', oPetActTimer = 'u32', oPetAreaId = 'u32', oPetTargetPitch = 's32'})
 local WPET_ACT_IDLE = 0
 local WPET_ACT_FOLLOW = 1
 local WPET_ACT_PETTED = 2
@@ -245,10 +246,6 @@ local function wpet_modify(o, petIndex, altIndex)
     o.header.gfx.node.flags = o.header.gfx.node.flags | GRAPH_RENDER_INVISIBLE
     wpet_set_action(o, WPET_ACT_TELEPORT)
 
-    if o.oAction == WPET_ACT_IDLE and o.oHeldState == HELD_FREE then
-        o.oPetActTimer = 1
-    end
-
     -- sync
     network_send_object(o, true)
 end
@@ -307,22 +304,23 @@ local function mario_update(m)
 
     if m.controller.buttonPressed & petLocalSettings.petBind ~= 0 and (m.action == ACT_IDLE or m.action == ACT_WALKING) then
         local o = obj_get_nearest_object_with_behavior_id(m.marioObj, id_bhvWPet)
-        if o and o.oIntangibleTimer == 0 then
-            local dist = dist_between_objects(m.marioObj, o)
-            if dist < 150 then
-                m.faceAngle.y = mario_obj_angle_to_object(m, o)
-                set_mario_action(m, ACT_PETTING, o.globalPlayerIndex)
+        local dist = dist_between_objects(m.marioObj, o)
+        if o and o.oIntangibleTimer == 0 and dist < 150 then
+            m.faceAngle.y = mario_obj_angle_to_object(m, o)
+            set_mario_action(m, ACT_PETTING, o.globalPlayerIndex)
 
-                -- keep character within a certain distance
-                dist = clampf(dist, 45, 100)
-                m.pos.x = o.oPosX - sins(m.faceAngle.y)*dist
-                m.pos.z = o.oPosZ - coss(m.faceAngle.y)*dist
+            -- keep character within a certain distance
+            dist = clampf(dist, 50, 80)
+            m.pos.x = o.oPosX - sins(m.faceAngle.y)*dist
+            m.pos.z = o.oPosZ - coss(m.faceAngle.y)*dist
 
-                if o.oAction ~= WPET_ACT_PETTED then
-                    wpet_set_action(o, WPET_ACT_PETTED)
-                    network_send_object(o, false)
-                end
+            if o.oAction ~= WPET_ACT_PETTED then
+                wpet_set_action(o, WPET_ACT_PETTED)
+                network_send_object(o, false)
             end
+        elseif activePetObj then
+            wpet_set_action(activePetObj, WPET_ACT_TELEPORT)
+            network_send_object(activePetObj, true)
         end
     end
 end
@@ -442,7 +440,7 @@ local function bhv_wpet_init(o)
     o.oForwardVel = 0.0
 
     -- sync these values
-    network_init_object(o, true, {'oPetIndex', 'oPetActTimer', 'oPetAreaId', 'oPetAlt', 'oHeldState', 'oInteractStatus'})
+    network_init_object(o, true, {'oPetIndex', 'oPetActTimer', 'oPetAreaId', 'oPetAlt', 'oPetTargetPitch', 'oHeldState', 'oInteractStatus'})
 end
 
 ---@type table<integer,fun(o:Object,m:MarioState,dist?:number,targetAngle?:number)>
@@ -487,7 +485,7 @@ local wpet_actions = {
             o.oForwardVel = approach_f32(o.oForwardVel, targetVel, 2.0, 4.0)
             o.oVelY = clampf((m.pos.y + 80 - o.oPosY) * 0.03, -10.0, 10.0)
 
-            o.oFaceAnglePitch = obj_pitch_to_object(o, m.marioObj) * 0.5
+            o.oPetTargetPitch = obj_pitch_to_object(o, m.marioObj) * 0.5
 
             if cur_obj_check_anim_frame(12) | cur_obj_check_if_at_animation_end() ~= 0 then
                 wpet_play_sound(o, 4)
@@ -500,12 +498,19 @@ local wpet_actions = {
                 o.oVelY = 0.0
                 -- jump while at an edge OR if height difference is great, and mario is close to the ground
                 if (o.oMoveFlags & OBJ_MOVE_HIT_EDGE ~= 0 or o.oPosY < m.pos.y - 300) and m.pos.y < m.floorHeight + 200 then
-                    --local floorDist = 400
-                    --local deltaFloorHeight = find_floor_height(o.oPosX + sins(o.oFaceAngleYaw) * floorDist, o.oPosY + 200, o.oPosZ + coss(o.oFaceAngleYaw) * floorDist) - o.oFloorHeight
                     local deltaFloorHeight = m.floorHeight - o.oFloorHeight
-                    o.oVelY = 20.0 * math.sqrt(maxf(1.0, deltaFloorHeight / 110.0))
+                    o.oVelY = 20.0 * math.sqrt(maxf(0.75, deltaFloorHeight / 110.0))
                     o.oForwardVel = o.oForwardVel + minf(dist / 20, 45.0)
                     o.oMoveFlags = o.oMoveFlags | OBJ_MOVE_LEFT_GROUND
+                end
+                if o.oMoveFlags & OBJ_MOVE_HIT_WALL ~= 0 then
+                    local floorDist = 30
+                    local deltaFloorHeight = find_floor_height(o.oPosX + sins(o.oFaceAngleYaw) * floorDist, o.oPosY + 200, o.oPosZ + coss(o.oFaceAngleYaw) * floorDist) - o.oFloorHeight
+                    if math.abs(deltaFloorHeight) < 200 then
+                        o.oVelY = 20.0 * math.sqrt(maxf(0.75, deltaFloorHeight / 110.0))
+                        o.oForwardVel = 20.0
+                        o.oMoveFlags = o.oMoveFlags | OBJ_MOVE_LEFT_GROUND
+                    end
                 end
                 -- ???
                 if o.oMoveFlags & OBJ_MOVE_AT_WATER_SURFACE ~= 0 then
@@ -516,7 +521,7 @@ local wpet_actions = {
                 if o.oFloor then
                     local floorAngle = atan2s(o.oFloor.normal.z, o.oFloor.normal.x)
                     local floorSlope = minf((1.0 - o.oFloor.normal.y) * 0x8000, 0x4000)
-                    o.oFaceAnglePitch = floorSlope * coss(floorAngle - o.oFaceAngleYaw)
+                    o.oPetTargetPitch = floorSlope * coss(floorAngle - o.oFaceAngleYaw)
                 end
 
                 if cur_obj_check_anim_frame(15) | cur_obj_check_if_at_animation_end() ~= 0 then
@@ -579,7 +584,7 @@ local wpet_actions = {
         end
         o.oPetActTimer = o.oPetActTimer + 1
     end,
-    [WPET_ACT_TELEPORT] = function (o, m)
+    [WPET_ACT_TELEPORT] = function (o, m, dist)
         --[[ TODO synced random ?
         local spawnAngle = math.random(-0x8000, 0x8000)
         local x = m.pos.x + sins(spawnAngle) * 100
@@ -595,11 +600,12 @@ local wpet_actions = {
         -- check for a valid floor in the spawn pos and skip if not valid
         if math.abs(find_floor_height(x, y, z) - m.pos.y) > 200 then return end
 
-        if o.oPetActTimer == 0 then
+        if dist > 300 or dist < 30 then
             o.oPosX = x
             o.oPosY = y
             o.oPosZ = z
             o.oFaceAngleYaw = m.faceAngle.y
+            o.oFaceAngleRoll = 0
         else
             -- used when pet is already idle and not being held
             o.oPosY = o.oPosY + 30
@@ -666,14 +672,14 @@ local function bhv_wpet_loop(o)
         -- collisions
         cur_obj_update_floor_and_resolve_wall_collisions(80)
 
-        o.oFaceAnglePitch = 0
-        o.oFaceAngleRoll = 0
+        o.oPetTargetPitch = 0
         -- action switch statement
         wpet_actions[o.oAction](o, m, dist, targetAngle)
 
+        o.oFaceAnglePitch = approach_s16_asymptotic(o.oFaceAnglePitch, o.oPetTargetPitch, 3)
+
         -- teleport when hitting death barrier or lava OR owner player manually teleports
         if (o.oPosY <= o.oFloorHeight and o.oMoveFlags & (OBJ_MOVE_ABOVE_DEATH_BARRIER | OBJ_MOVE_ABOVE_LAVA) ~= 0)
-        or (m.controller.buttonPressed & U_JPAD ~= 0 and m.pos.y < m.floorHeight + 200)
         then
             wpet_set_action(o, WPET_ACT_TELEPORT)
         end
@@ -719,7 +725,7 @@ hook_event(HOOK_ON_HUD_RENDER, function ()
     local m = gMarioStates[0]
     djui_hud_set_color(255, 255, 255, 255)
     djui_hud_set_font(FONT_NORMAL)
-    --djui_hud_print_text("" .. coss(atan2s(m.floor.normal.z, m.floor.normal.x) - m.faceAngle.y), 64, 128, 2.0)
+    --djui_hud_print_text("" .. m.actionTimer, 64, 128, 1.0)
     local y = 128
     --djui_hud_print_text(debugVal or "nil", 64, y, 2.0)
     for i = 0, MAX_PLAYERS-1, 1 do
