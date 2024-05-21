@@ -48,21 +48,25 @@ petAltModels = {}
 
 ---- SETTINGS
 
-local SETTING_OFF = 0
-local SETTING_OWNER = 1
-local SETTING_ALL = 2
+local SETTING_OFF = 1
+local SETTING_OWNER = 2
+local SETTING_ALL = 3
+
+local PET_BINDS = {Y_BUTTON, U_JPAD}
 
 -- global/server settings
 if network_is_server() then
-    gGlobalSyncTable.grabAllowed = mod_storage_load_number('grabAllowed') or SETTING_ALL
-    gGlobalSyncTable.throwAllowed = mod_storage_load_number('throwAllowed') or SETTING_OFF
-    gGlobalSyncTable.kickAllowed = mod_storage_load_number('kickAllowed') or SETTING_OFF
+    gGlobalSyncTable.grabAllowed = max(1, mod_storage_load_number('grabAllowed'))
+    gGlobalSyncTable.throwAllowed = max(1, mod_storage_load_number('throwAllowed'))
+    gGlobalSyncTable.kickAllowed = max(1, mod_storage_load_number('kickAllowed'))
 end
 
 -- local player settings
 petLocalSettings = {
-    petBind = Y_BUTTON,
+    menuBind = max(1, mod_storage_load_number('menuBind') or 1),
+    petBind = max(1, mod_storage_load_number('petBind') or 1),
 }
+
 
 ---- API
 
@@ -183,11 +187,13 @@ local function wpet_set_action(o, action)
     o.oPetActTimer = 0
 
     if o.oHeldState ~= HELD_FREE then
-        cur_obj_become_tangible()
-        cur_obj_enable_rendering()
-        o.oHeldState = HELD_FREE
-        o.header.gfx.node.flags = o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE
         mario_drop_held_object(gMarioStates[o.heldByPlayerIndex])
+        obj_become_tangible(o)
+        o.header.gfx.node.flags = (o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE) | GRAPH_RENDER_ACTIVE
+        o.oHeldState = HELD_FREE
+        if gMarioStates[o.heldByPlayerIndex].action & ACT_GROUP_OBJECT == 0 then
+            set_mario_action(gMarioStates[o.heldByPlayerIndex], ACT_IDLE, 0)
+        end
     end
 
     -- animation handling
@@ -243,8 +249,8 @@ local function wpet_modify(o, petIndex, altIndex)
 
     if pet.flying then o.oGravity = -0.1 else o.oGravity = -1.5 end
 
-    o.header.gfx.node.flags = o.header.gfx.node.flags | GRAPH_RENDER_INVISIBLE
     wpet_set_action(o, WPET_ACT_TELEPORT)
+    o.header.gfx.node.flags = o.header.gfx.node.flags | GRAPH_RENDER_INVISIBLE
 
     -- sync
     network_send_object(o, true)
@@ -302,7 +308,7 @@ end
 local function mario_update(m)
     if m.playerIndex ~= 0 then return end
 
-    if m.controller.buttonPressed & petLocalSettings.petBind ~= 0 and (m.action == ACT_IDLE or m.action == ACT_WALKING) then
+    if m.controller.buttonPressed & PET_BINDS[petLocalSettings.petBind] ~= 0 and (m.action == ACT_IDLE or m.action == ACT_WALKING) then
         local o = obj_get_nearest_object_with_behavior_id(m.marioObj, id_bhvWPet)
         local dist = dist_between_objects(m.marioObj, o)
         if o and o.oIntangibleTimer == 0 and dist < 150 then
@@ -331,11 +337,11 @@ hook_event(HOOK_MARIO_UPDATE, mario_update)
 local function before_set_action(m, nextAct)
     if m.playerIndex ~= 0 then return end
 
-    if nextAct == ACT_THROWING and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
+    if nextAct == ACT_THROWING and m.heldObj and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
         if m.controller.stickMag < 48 or not wpet_is_setting(gGlobalSyncTable.throwAllowed, m.marioObj.globalPlayerIndex, m.heldObj.globalPlayerIndex) then
             return ACT_PLACING_DOWN
         end
-    elseif nextAct == ACT_AIR_THROW and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
+    elseif nextAct == ACT_AIR_THROW and m.heldObj and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
         if not wpet_is_setting(gGlobalSyncTable.throwAllowed, m.marioObj.globalPlayerIndex, m.heldObj.globalPlayerIndex) then
             return 1
         end
@@ -637,6 +643,7 @@ local wpet_actions = {
     [WPET_ACT_DESPAWN] = function (o, m)
         spawn_mist_particles_with_sound(SOUND_GENERAL_VANISH_SFX)
         wpet_play_sound(o, 3)
+
         obj_mark_for_deletion(o)
         if m.playerIndex == 0 then activePetObj = nil end
     end,

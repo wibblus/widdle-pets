@@ -16,18 +16,22 @@ local menu = {
 }
 
 local settings = {
-    {key = 'grabAllowed', name = "Grabbing"},
-    {key = 'throwAllowed', name = "Throwing"},
-    {key = 'kickAllowed', name = "Kicking"},
-}
-local settingStatus = {
-    [0] = '[OFF]',
-    [1] = '[OWNER]',
-    [2] = '[ALLOWED]',
+    {key = 'grabAllowed', name = "Grabbing", desc = "Who is allowed to pick up pets?", server = true,
+        opts = {'[NONE]', '[OWNER]', '[ALL]'}},
+    {key = 'throwAllowed', name = "Throwing", desc = "Who is allowed to throw pets?", server = true,
+        opts = {'[NONE]', '[OWNER]', '[ALL]'}},
+    {key = 'kickAllowed', name = "Kicking", desc = "Who is allowed to kick pets?", server = true,
+        opts = {'[NONE]', '[OWNER]', '[ALL]'}},
+    {key = 'menuBind', name = "Menu Bind", desc = "The bind to open the pets menu.",
+        opts = {'[DPAD-RIGHT]', '[/pet ONLY]'}},
+    {key = 'petBind', name = "Petting Bind", desc = "The bind to pet/warp a pet.",
+        opts = {'[Y]', '[DPAD-UP]'}}
 }
 
 local OPEN_LENGTH = 8
 local MENU_BUTTON_MASK = (D_JPAD | U_JPAD | R_JPAD | L_JPAD | L_TRIG | R_TRIG)
+
+local MENU_BINDS = {R_JPAD, 0}
 
 -- UTIL
 
@@ -39,6 +43,12 @@ local function render_interpolated_text(message, x, y, scale)
 end
 local function render_interpolated_texture(texInfo, x, y, scaleW, scaleH)
     djui_hud_render_texture_interpolated(texInfo, x - menu.interpX, y, scaleW, scaleH, x, y, scaleW, scaleH)
+end
+
+local function open_pet_menu()
+    menu.open = true
+    menu.buttonDown = MENU_BUTTON_MASK
+    play_sound(SOUND_MENU_CAMERA_ZOOM_IN, gLakituState.pos)
 end
 
 -- TEXTURES
@@ -88,11 +98,22 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                         end
                     end
                     spawn_player_pet(m, petIndex, altIndex)
-                elseif network_is_server() then
-                    local key = settings[menu.curSetting].key
-                    gGlobalSyncTable[key] = gGlobalSyncTable[key] + 1
-                    if gGlobalSyncTable[key] > 2 then gGlobalSyncTable[key] = 0 end
-                    mod_storage_save_number(key, gGlobalSyncTable[key])
+                else
+                    local setting = settings[menu.curSetting]
+                    local key = setting.key
+                    if setting.server then
+                        if not network_is_server() then
+                            play_sound(SOUND_MENU_CAMERA_BUZZ, gLakituState.pos)
+                        else
+                            gGlobalSyncTable[key] = gGlobalSyncTable[key] + 1
+                            if gGlobalSyncTable[key] > #setting.opts then gGlobalSyncTable[key] = 1 end
+                            mod_storage_save_number(key, gGlobalSyncTable[key])
+                        end
+                    else
+                        petLocalSettings[key] = petLocalSettings[key] + 1
+                        if petLocalSettings[key] > #setting.opts then petLocalSettings[key] = 1 end
+                        mod_storage_save_number(key, petLocalSettings[key])
+                    end
                 end
                 play_sound(SOUND_MENU_CLICK_FILE_SELECT, gLakituState.pos)
             elseif buttonPressed & U_JPAD ~= 0 then
@@ -129,10 +150,8 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
         m.controller.buttonPressed = m.controller.buttonPressed & ~MENU_BUTTON_MASK
         m.controller.buttonDown = m.controller.buttonDown & ~MENU_BUTTON_MASK
     elseif not is_game_paused() then
-        if m.controller.buttonPressed & R_JPAD ~= 0 then
-            menu.open = true
-            menu.buttonDown = MENU_BUTTON_MASK
-            play_sound(SOUND_MENU_CAMERA_ZOOM_IN, gLakituState.pos)
+        if m.controller.buttonPressed & MENU_BINDS[petLocalSettings.menuBind] ~= 0 then
+            open_pet_menu()
         end
     end
 end)
@@ -172,7 +191,7 @@ local function render_pet_menu()
             if i > #petTable then break end
             -- set colors for options + selector icon
             local name
-            if petTable[i] then name = petTable[i].name else name = "[NONE]" end
+            if petTable[i] then name = petTable[i].name else name = "---" end
             local x = bgX + 8
             local y = bgY + 18 + (i - menu.upperPet)*12
 
@@ -209,6 +228,7 @@ local function render_pet_menu()
             djui_hud_render_rect_interpolated(bgX + 3 - menu.interpX, startY + yAB * ((menu.curPet - menu.scrollDir) / #petTable), 1, height, bgX + 3, startY + yAB * (menu.curPet / #petTable), 1, height)
         end
 
+        -- description + credit
         if menu.curPet > 0 then
             djui_hud_set_color(200, 200, 200, 255)
             local desc = (petTable[menu.curPet].description or "A cool lil pet.") .. " "
@@ -228,6 +248,9 @@ local function render_pet_menu()
 
             local credit = petTable[menu.curPet].credit or ""
             render_interpolated_text(credit, bgX + bgWidth - djui_hud_measure_text(credit)*TEX_SML - 2, bgY + bgHeight - 8, TEX_SML)
+        else
+            djui_hud_set_color(200, 200, 200, 255)
+            render_interpolated_text("No pet.", bgX + 4, bgY + bgHeight - 24, TEX_SML)
         end
     else
         -- settings tab
@@ -236,7 +259,7 @@ local function render_pet_menu()
         render_interpolated_texture(TEX_TAB_PETS, bgX + bgWidth - 52, bgY - 5, 0.7, 0.7)
 
         -- render differently for players who can change settings vs can't
-        if network_is_server() then
+        do
             for i = 1, #settings, 1 do
                 local name = settings[i].name
                 local x = bgX + 8
@@ -252,24 +275,20 @@ local function render_pet_menu()
                 end
 
                 render_interpolated_text(name, x, y, TEX_MED)
-                local status = settingStatus[gGlobalSyncTable[settings[i].key]]
+
+                if not network_is_server() and settings[i].server then
+                    djui_hud_set_color(150, 150, 150, 255)
+                end
+                local key = gGlobalSyncTable[settings[i].key] or petLocalSettings[settings[i].key]
+                local status = settings[i].opts[key]
                 if status then
                     render_interpolated_text(status, bgX + bgWidth - 12 - djui_hud_measure_text(status)*TEX_MED, y, TEX_MED)
                 end
             end
-        else
-            djui_hud_set_color(150, 150, 150, 255)
-            for i = 1, #settings, 1 do
-                local name = settings[i].name
-                local x = bgX + 6
-                local y = bgY + 16 + (i-1)*12
 
-                render_interpolated_text(name, x, y, TEX_MED)
-                local status = settingStatus[gGlobalSyncTable[settings[i].key]]
-                if status then
-                    render_interpolated_text(status, bgX + bgWidth - 4 - djui_hud_measure_text(status)*TEX_MED, y, TEX_MED)
-                end
-            end
+            djui_hud_set_color(200, 200, 200, 255)
+            local desc = settings[menu.curSetting].desc
+            render_interpolated_text(desc, bgX + 4, bgY + bgHeight - 24, TEX_SML)
         end
     end
 
@@ -321,6 +340,10 @@ hook_chat_command('pet', " [list/clear/pet_name]", function (msg)
                 return true
             end
         end
+
+    elseif not menu.open then
+        open_pet_menu()
+        return true
     end
     return false
 end)

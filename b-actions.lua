@@ -5,7 +5,7 @@ ACT_PETTING = allocate_mario_action(ACT_GROUP_AUTOMATIC | ACT_FLAG_STATIONARY)
 ---@param m MarioState
 local function act_petting(m)
     if m.actionTimer == 0 then
-        set_mario_animation(m, 0)
+        set_mario_animation(m, CHAR_ANIM_SHIVERING)
         smlua_anim_util_set_animation(m.marioObj, 'char_pet_pet')
         play_sound(SOUND_GENERAL_SHORT_STAR, m.marioObj.header.gfx.cameraToObject)
         set_mario_particle_flags(m, PARTICLE_SPARKLES, 0)
