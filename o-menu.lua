@@ -25,7 +25,9 @@ local settings = {
     {key = 'menuBind', name = "Menu Bind", desc = "The bind to open the pets menu.",
         opts = {'[DPAD-RIGHT]', '[/pet ONLY]'}},
     {key = 'petBind', name = "Petting Bind", desc = "The bind to pet/warp a pet.",
-        opts = {'[Y]', '[DPAD-UP]'}}
+        opts = {'[Y]', '[DPAD-UP]'}},
+    {key = 'stepSounds', name = "Step Sound Effects", desc = "Whether pets have audible steps/flaps.",
+        opts = {'[ON]', '[OFF]'}}
 }
 
 local OPEN_LENGTH = 8
@@ -122,7 +124,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                     menu.curPet = menu.curPet - 1
                     if menu.curPet < 0 then menu.curPet = #petTable ; menu.upperPet = max(0, #petTable - menu.listSize) end
                     if menu.curPet < menu.upperPet then menu.upperPet = menu.upperPet - 1 ; menu.scrollDirFull = -1 end
-                elseif network_is_server() then
+                else
                     menu.curSetting = menu.curSetting - 1
                     if menu.curSetting < 1 then menu.curSetting = #settings end
                 end
@@ -134,7 +136,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                     menu.curPet = menu.curPet + 1
                     if menu.curPet > #petTable then menu.curPet = 0 ; menu.upperPet = 0 end
                     if menu.curPet > menu.upperPet + menu.listSize then menu.upperPet = menu.upperPet + 1 ; menu.scrollDirFull = 1 end
-                elseif network_is_server() then
+                else
                     menu.curSetting = menu.curSetting + 1
                     if menu.curSetting > #settings then menu.curSetting = 1 end
                 end
@@ -156,7 +158,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
     end
 end)
 
-local TEX_SML = 0.25
+local TEX_SML = 0.24
 local TEX_MED = 0.35
 local TEX_LRG = 0.5
 
@@ -185,7 +187,7 @@ local function render_pet_menu()
         -- pets tab
         render_interpolated_texture(TEX_TAB_PETS, bgX + bgWidth - 52, bgY - 12, 0.7, 0.7)
         djui_hud_set_color(255, 255, 255, 150)
-        render_interpolated_texture(TEX_TAB_SETTINGS, bgX + bgWidth - 28, bgY - 5, 0.7, 0.7)
+        render_interpolated_texture(TEX_TAB_SETTINGS, bgX + bgWidth - 28, bgY - 4, 0.7, 0.7)
 
         for i = menu.upperPet, menu.upperPet + menu.listSize, 1 do
             if i > #petTable then break end
@@ -229,6 +231,7 @@ local function render_pet_menu()
         end
 
         -- description + credit
+        --djui_hud_set_font(FONT_ALIASED)
         if menu.curPet > 0 then
             djui_hud_set_color(200, 200, 200, 255)
             local desc = (petTable[menu.curPet].description or "A cool lil pet.") .. " "
@@ -256,7 +259,7 @@ local function render_pet_menu()
         -- settings tab
         render_interpolated_texture(TEX_TAB_SETTINGS, bgX + bgWidth - 28, bgY - 12, 0.7, 0.7)
         djui_hud_set_color(255, 255, 255, 150)
-        render_interpolated_texture(TEX_TAB_PETS, bgX + bgWidth - 52, bgY - 5, 0.7, 0.7)
+        render_interpolated_texture(TEX_TAB_PETS, bgX + bgWidth - 52, bgY - 4, 0.7, 0.7)
 
         -- render differently for players who can change settings vs can't
         do
