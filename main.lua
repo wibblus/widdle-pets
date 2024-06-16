@@ -125,7 +125,7 @@ local function wpet_play_anim(o, animID)
     local anim = petTable[o.oPetIndex].animList[animID] or petTable[o.oPetIndex].animList[0]
     if anim then
         smlua_anim_util_set_animation(o, anim)
-        o.header.gfx.animInfo.animYTrans = 2.0
+        o.header.gfx.animInfo.animYTrans = 1
         o.header.gfx.animInfo.animFrame = 0
     elseif petTable[o.oPetIndex].animPointer then
         obj_init_animation(o, 0)
@@ -570,8 +570,8 @@ local wpet_actions = {
     [WPET_ACT_TELEPORT] = function (o, m, dist)
         wpet_drop(o)
 
-        local x = m.pos.x + sins(m.faceAngle.y + 0x4000) * 100.0
-        local z = m.pos.z + coss(m.faceAngle.y + 0x4000) * 100.0
+        local x = m.pos.x + sins(m.faceAngle.y - 0x4000) * 100.0
+        local z = m.pos.z + coss(m.faceAngle.y - 0x4000) * 100.0
         local y = m.pos.y + 50.0
 
         o.oForwardVel = 0
