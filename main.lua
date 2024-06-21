@@ -49,25 +49,20 @@ petAltModels = {}
 
 ---- SETTINGS
 
-local SETTING_OFF = 1
-local SETTING_OWNER = 2
-local SETTING_ALL = 3
-
 local PET_BINDS = {Y_BUTTON, U_JPAD}
-
--- global/server settings
-if network_is_server() then
-    gGlobalSyncTable.grabAllowed = max(1, mod_storage_load_number('grabAllowed'))
-    gGlobalSyncTable.throwAllowed = max(1, mod_storage_load_number('throwAllowed'))
-    gGlobalSyncTable.kickAllowed = max(1, mod_storage_load_number('kickAllowed'))
-end
 
 -- local player settings
 petLocalSettings = {
-    menuBind = max(1, mod_storage_load_number('menuBind') or 1),
-    petBind = max(1, mod_storage_load_number('petBind') or 1),
-    stepSounds = max(1, mod_storage_load_number('stepSounds') or 1),
+    grabAllowed = clamp(mod_storage_load_number('grabAllowed'), 1, 2),
+    throwAllowed = clamp(mod_storage_load_number('throwAllowed'), 1, 2),
+    kickAllowed = clamp(mod_storage_load_number('kickAllowed'), 1, 2),
+    menuBind = clamp(mod_storage_load_number('menuBind'), 1, 2),
+    petBind = clamp(mod_storage_load_number('petBind'), 1, 2),
+    petSounds = clamp(mod_storage_load_number('petSounds'), 1, 3),
+    showCtrls = clamp(mod_storage_load_number('showCtrls'), 1, 2),
 }
+
+gPlayerSyncTable[0].kickAllowed = petLocalSettings.kickAllowed
 
 ---- WPET BEHAVIOR SETUP
 
@@ -100,21 +95,16 @@ local function wpet_update_blinking(o)
     end
 end
 
----@return boolean
-function wpet_is_setting(key, mIndex, oIndex)
-    if key == SETTING_ALL or (key == SETTING_OWNER and mIndex == oIndex) then return true end
-    return false
-end
-
 ---@param o Object
 local function wpet_drop(o)
     if o.oHeldState ~= HELD_FREE then
-        mario_drop_held_object(gMarioStates[o.heldByPlayerIndex])
+        local m = gMarioStates[o.heldByPlayerIndex]
+        mario_drop_held_object(m)
         obj_become_tangible(o)
         o.header.gfx.node.flags = (o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE) | GRAPH_RENDER_ACTIVE
         o.oHeldState = HELD_FREE
-        if gMarioStates[o.heldByPlayerIndex].action & ACT_GROUP_OBJECT == 0 then
-            set_mario_action(gMarioStates[o.heldByPlayerIndex], ACT_IDLE, 0)
+        if m.action & ACT_GROUP_OBJECT == 0 then
+            set_mario_action(m, ACT_IDLE, 0)
         end
     end
 end
@@ -146,6 +136,8 @@ end
 ---@param o Object
 ---@param sound integer
 local function wpet_play_sound(o, sound)
+    if petLocalSettings.petSounds == 3 then return end
+
     local s = petTable[o.oPetIndex].soundList[sound]
     if s then
         -- 'typ' because syntax highlighting scared me :thumbsup:
@@ -163,8 +155,11 @@ local function wpet_play_sound(o, sound)
         elseif typ == 'string' then
             -- sample
             local index = network_local_index_from_global(o.globalPlayerIndex)
+            -- double triple check babey
             if gPetSamples[index] and gPetSamples[index].sample then
-                audio_sample_destroy(gPetSamples[index].sample)
+                if gPetSamples[index].sample.loaded then
+                    audio_sample_destroy(gPetSamples[index].sample)
+                end
                 gPetSamples[index].sample = nil
             end
 
@@ -176,13 +171,15 @@ end
 
 ---@param o Object
 local function wpet_step_sounds(o)
-    if petLocalSettings.stepSounds == 2 then return end
+    if petLocalSettings.petSounds >= 2 then return end
 
     local animInfo = o.header.gfx.animInfo
     local anim = animInfo.curAnim
 
     if (animInfo.animFrame == (anim.loopEnd - anim.loopStart) // 2 + anim.loopStart) or animInfo.animFrame == animInfo.curAnim.loopEnd-1 then
-        wpet_play_sound(o, 4)
+        if o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER == 0 then
+            wpet_play_sound(o, 4)
+        end
     end
 end
 
@@ -291,6 +288,7 @@ local function mario_update(m)
 
             if o.oAction ~= WPET_ACT_PETTED then
                 wpet_set_action(o, WPET_ACT_PETTED)
+                o.oPosY = m.pos.y
                 network_send_object(o, false)
             end
         elseif activePetObj and dist_between_objects(m.marioObj, activePetObj) > 600 then
@@ -306,17 +304,24 @@ hook_event(HOOK_MARIO_UPDATE, mario_update)
 local function before_set_action(m, nextAct)
     if m.playerIndex ~= 0 then return end
 
+    if m.action == ACT_TELEPORT_FADE_IN then
+        gPlayerSyncTable[0].warping = false
+    end
+
     if nextAct == ACT_THROWING and m.heldObj and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
-        if m.controller.stickMag < 48 or not wpet_is_setting(gGlobalSyncTable.throwAllowed, m.marioObj.globalPlayerIndex, m.heldObj.globalPlayerIndex) then
+        if m.controller.stickMag < 48 or petLocalSettings.throwAllowed == 2 then
             return ACT_PLACING_DOWN
         end
     elseif nextAct == ACT_AIR_THROW and m.heldObj and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
-        if not wpet_is_setting(gGlobalSyncTable.throwAllowed, m.marioObj.globalPlayerIndex, m.heldObj.globalPlayerIndex) then
-            return 1
+        if petLocalSettings.throwAllowed == 2 then
+            wpet_drop(m.heldObj)
+            return ACT_FREEFALL
         end
     end
 end
 hook_event(HOOK_BEFORE_SET_MARIO_ACTION, before_set_action)
+
+-- INTERACT
 
 local interactActs = {
     [ACT_PUNCHING] = true, [ACT_MOVE_PUNCHING] = true, [ACT_DIVE] = true, [ACT_DIVE_SLIDE] = true, [ACT_JUMP_KICK] = true
@@ -328,20 +333,25 @@ local interactActs = {
 local function allow_interact(m, o, type)
     if type == INTERACT_GRABBABLE and get_id_from_behavior(o.behavior) == id_bhvWPet then
         if not interactActs[m.action] then
-            if o.oAction == WPET_ACT_BOUNCE and o.oPetActTimer > 4 and m.action & (ACT_FLAG_INVULNERABLE | ACT_FLAG_INTANGIBLE) == 0 then
+            if o.oAction == WPET_ACT_BOUNCE and o.oPetActTimer > 4 and m.action & (ACT_FLAG_INVULNERABLE | ACT_FLAG_INTANGIBLE | ACT_FLAG_SWIMMING) == 0 then
                 drop_and_set_mario_action(m, ACT_GROUND_BONK, 0)
                 o.oMoveAngleYaw = o.oMoveAngleYaw - 0x8000
                 o.oForwardVel = o.oForwardVel / 2.0
+                network_send_object(o, false)
             end
             return false
         elseif m.action == ACT_JUMP_KICK then
-            if not wpet_is_setting(gGlobalSyncTable.kickAllowed, m.marioObj.globalPlayerIndex, o.globalPlayerIndex) then return false end
-        elseif not wpet_is_setting(gGlobalSyncTable.grabAllowed, m.marioObj.globalPlayerIndex, o.globalPlayerIndex) then
+            if gPlayerSyncTable[network_local_index_from_global(o.globalPlayerIndex)].kickAllowed == 2 then
+                return false
+            end
+        elseif petLocalSettings.grabAllowed == 2 then
             return false
         end
     end
 end
 hook_event(HOOK_ALLOW_INTERACT, allow_interact)
+
+-- WARP / DISCONNECT STUFF
 
 local function on_sync_valid()
     gPlayerSyncTable[0].warping = false
@@ -370,9 +380,16 @@ local function on_warp()
 end
 hook_event(HOOK_ON_WARP, on_warp)
 
+local function on_disconnect(m)
+    despawn_player_pet(m)
+end
+hook_event(HOOK_ON_PLAYER_DISCONNECTED, on_disconnect)
+
+--
+
 local danceActs = {
     [ACT_STAR_DANCE_EXIT] = true, [ACT_STAR_DANCE_NO_EXIT] = true, [ACT_STAR_DANCE_WATER] = true, [ACT_JUMBO_STAR_CUTSCENE] = true,
-    [ACT_END_WAVING_CUTSCENE] = true, [ACT_UNLOCKING_STAR_DOOR] = true, [ACT_UNLOCKING_KEY_DOOR] = true
+    [ACT_END_WAVING_CUTSCENE] = true, [ACT_UNLOCKING_STAR_DOOR] = true, [ACT_UNLOCKING_KEY_DOOR] = true, [ACT_PUTTING_ON_CAP] = true
 }
 local exitActs = {
     [ACT_EXIT_AIRBORNE] = true, [ACT_DEATH_EXIT] = true, [ACT_FALLING_DEATH_EXIT] = true,
@@ -430,7 +447,7 @@ local wpet_actions = {
     [WPET_ACT_IDLE] = function (o, m, dist, targetAngle)
         o.oForwardVel = approach_f32_symmetric(o.oForwardVel, 0.0, 0.5)
 
-        if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 then
+        if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 or m.action == ACT_FLYING then
             -- flying pet / swimming
             o.oVelY = clampf((m.pos.y + 80 - o.oPosY) * 0.03, -5.0, 5.0)
         else
@@ -461,7 +478,7 @@ local wpet_actions = {
         local targetVel = 32.0 * (1.0 - minf(abs_angle_diff(o.oFaceAngleYaw, targetAngle) / 0x4000, 1.0)) * minf(dist / 800, 1.0)
         --o.header.gfx.animInfo.animFrame = ((o.header.gfx.animInfo.animFrame << 8) + math.floor(o.oForwardVel) << 4) >> 8
 
-        if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 then
+        if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 or m.action == ACT_FLYING then
             -- flying pet / swimming
 
             o.oForwardVel = approach_f32(o.oForwardVel, targetVel, 2.0, 4.0)
@@ -469,9 +486,8 @@ local wpet_actions = {
 
             o.oPetTargetPitch = obj_pitch_to_object(o, m.marioObj) * 0.5
 
-            if cur_obj_check_anim_frame(12) | cur_obj_check_if_at_animation_end() ~= 0 then
-                wpet_play_sound(o, 4)
-            end
+            wpet_step_sounds(o)
+
             if dist < 300 and yDist < 300 then return wpet_set_action(o, WPET_ACT_IDLE) end
         else
             -- walking pet
@@ -560,7 +576,7 @@ local wpet_actions = {
         if o.oMoveFlags & OBJ_MOVE_HIT_WALL ~= 0 then
             o.oMoveAngleYaw = (o.oWallAngle + (o.oWallAngle - o.oMoveAngleYaw)) - 0x8000
         end
-        if o.oMoveFlags & (OBJ_MOVE_LANDED | OBJ_MOVE_ENTERED_WATER) ~= 0 then
+        if o.oMoveFlags & (OBJ_MOVE_MASK_ON_GROUND | OBJ_MOVE_MASK_IN_WATER) ~= 0 then
             if petTable[o.oPetIndex].flying then o.oGravity = -0.1 else o.oGravity = -1.5 end
             o.oForwardVel = o.oForwardVel * 0.5
             wpet_set_action(o, WPET_ACT_IDLE)
@@ -598,11 +614,13 @@ local wpet_actions = {
             obj_set_model_extended(o, petTable[o.oPetIndex].modelID)
         end
         o.oAnimations = petTable[o.oPetIndex].animPointer or gObjectAnimations.amp_seg8_anims_08004034
+        obj_scale(o, petTable[o.oPetIndex].scale)
 
         o.header.gfx.node.flags = o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE
         cur_obj_become_tangible()
 
         spawn_mist_particles()
+        -- TODO mute spawn sound when changing areas
         wpet_play_sound(o, 1)
 
         if exitActs[m.action] then
@@ -654,6 +672,12 @@ local function bhv_wpet_loop(o)
             o.oMoveFlags = (o.oMoveFlags & ~(OBJ_MOVE_LEFT_GROUND | OBJ_MOVE_IN_AIR)) | OBJ_MOVE_ON_GROUND
             o.oPosY = o.oFloorHeight
         end
+        -- spish spash
+        if o.oMoveFlags & OBJ_MOVE_ENTERED_WATER ~= 0 then
+            spawn_non_sync_object(id_bhvWaterSplash, E_MODEL_WATER_SPLASH, o.oPosX, o.oPosY, o.oPosZ, function (splash)
+                obj_scale(splash, 0.5) end)
+            play_sound(SOUND_OBJ_DIVING_INTO_WATER, o.header.gfx.cameraToObject)
+        end
         -- collisions
         cur_obj_update_floor_and_resolve_wall_collisions(80)
 
@@ -663,10 +687,26 @@ local function bhv_wpet_loop(o)
 
         o.oFaceAnglePitch = approach_s16_asymptotic(o.oFaceAnglePitch, o.oPetTargetPitch, 3)
 
-        -- teleport when hitting death barrier or lava OR owner player manually teleports
-        if (o.oPosY <= o.oFloorHeight and o.oMoveFlags & (OBJ_MOVE_ABOVE_DEATH_BARRIER | OBJ_MOVE_ABOVE_LAVA) ~= 0)
-        then
-            wpet_set_action(o, WPET_ACT_TELEPORT)
+        if o.oFloor and math.abs(o.oPosY - o.oFloorHeight) <= 4.0 then
+            -- update position for moving platforms
+            local floorObj = o.oFloor.object
+            if floorObj then
+                o.oPosX = o.oPosX + floorObj.oVelX
+                o.oPosZ = o.oPosZ + floorObj.oVelZ
+
+                local offset = {x = o.oPosX-floorObj.oPosX, y = o.oPosY-floorObj.oPosY, z = o.oPosZ-floorObj.oPosZ}
+                vec3f_rotate_zxy(offset, {x = floorObj.oAngleVelPitch, y = floorObj.oAngleVelYaw, z = floorObj.oAngleVelRoll})
+
+                o.oPosX = floorObj.oPosX + offset.x
+                o.oPosY = floorObj.oPosY + offset.y
+                o.oPosZ = floorObj.oPosZ + offset.z
+
+                o.oFaceAngleYaw = o.oFaceAngleYaw + floorObj.oAngleVelYaw
+            end
+            -- teleport when hitting death barrier or lava OR owner player manually teleports
+            if o.oMoveFlags & (OBJ_MOVE_ABOVE_DEATH_BARRIER | OBJ_MOVE_ABOVE_LAVA) ~= 0 then
+                wpet_set_action(o, WPET_ACT_TELEPORT)
+            end
         end
 
     elseif o.oHeldState == HELD_HELD then
@@ -705,6 +745,8 @@ id_bhvWPet = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_wpet_init, bhv_wpe
 
 ---- DEBUG
 
+--[[
+
 debugVal = ""
 
 hook_event(HOOK_ON_HUD_RENDER, function ()
@@ -722,3 +764,4 @@ hook_event(HOOK_ON_HUD_RENDER, function ()
         end
     end
 end)
+]]

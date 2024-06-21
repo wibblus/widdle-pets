@@ -882,7 +882,7 @@ local E_MODEL_BOBBUDDY_PET = smlua_model_util_get_id('bobbuddy_pet_geo')
 local ID_HPG = _G.wpets.add_pet({name = "Headphone Goomba", credit = "wibblus, Nintendo",
 	description = "His tunes are the best in the mushroom kingdom.",
 	modelID = E_MODEL_HEADPHONE_GOOMBA,
-	scale = 0.75, yOffset = 0
+	scale = 0.74, yOffset = 0
 })
 _G.wpets.set_pet_anims(ID_HPG, {
 	idle = 'hp_goob_idle',
@@ -900,7 +900,7 @@ local ID_MECHAK = _G.wpets.add_pet({
 	name = "Mechakoopa", credit = "wibblus",
 	description = "What an explosive friend! Up to mischief!",
 	modelID = E_MODEL_MECHAKOOPA,
-	scale = 0.85, yOffset = 3
+	scale = 0.84, yOffset = 3
 })
 _G.wpets.set_pet_anims(ID_MECHAK, {
 	idle = 'mechak_idle',
@@ -916,9 +916,9 @@ _G.wpets.set_pet_sounds(ID_MECHAK, {
 
 local ID_FLYGUY = _G.wpets.add_pet({
 	name = 'Fly Guy', credit = 'wibblus, Nintendo',
-	description = "Flying without a care in the world. Waow.",
+	description = "Flying without a care in the world. Waaaow.",
 	modelID = E_MODEL_FLYGUY_PET,
-	scale = 0.75, yOffset = 0, flying = true
+	scale = 0.76, yOffset = 0, flying = true
 })
 _G.wpets.set_pet_anims_wing(ID_FLYGUY)
 _G.wpets.set_pet_sounds(ID_FLYGUY, {
@@ -928,7 +928,7 @@ _G.wpets.set_pet_sounds(ID_FLYGUY, {
 
 local ID_BOBBUDDY = _G.wpets.add_pet({
 	name = 'Bob-omb Buddy', credit = 'wibblus, Nintendo',
-	description = "Well they can't open the cannon for you, but they sure are cute!",
+	description = "They can't open the cannon for you, but they sure are cute!",
 	modelID = E_MODEL_BOBBUDDY_PET,
 	scale = 0.75, yOffset = 0
 })

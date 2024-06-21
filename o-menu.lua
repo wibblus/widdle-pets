@@ -16,24 +16,28 @@ local menu = {
 }
 
 local settings = {
-    {key = 'grabAllowed', name = "Grabbing", desc = "Who is allowed to pick up pets?", server = true,
-        opts = {'[NONE]', '[OWNER]', '[ALL]'}},
-    {key = 'throwAllowed', name = "Throwing", desc = "Who is allowed to throw pets?", server = true,
-        opts = {'[NONE]', '[OWNER]', '[ALL]'}},
-    {key = 'kickAllowed', name = "Kicking", desc = "Who is allowed to kick pets?", server = true,
-        opts = {'[NONE]', '[OWNER]', '[ALL]'}},
+    {key = 'grabAllowed', name = "Grabbing", desc = "Are you able to pick up pets?",
+        opts = {'[ON]', '[OFF]'}},
+    {key = 'throwAllowed', name = "Throwing", desc = "Are you able to throw held pets?",
+        opts = {'[ON]', '[OFF]'}},
+    {key = 'kickAllowed', name = "Allow Kicks", desc = "Allow your pets to be kicked?", sync = true,
+        opts = {'[ON]', '[OFF]'}},
     {key = 'menuBind', name = "Menu Bind", desc = "The bind to open the pets menu.",
         opts = {'[DPAD-RIGHT]', '[/pet ONLY]'}},
     {key = 'petBind', name = "Petting Bind", desc = "The bind to pet/warp a pet.",
         opts = {'[Y]', '[DPAD-UP]'}},
-    {key = 'stepSounds', name = "Step Sound Effects", desc = "Whether pets have audible steps/flaps.",
-        opts = {'[ON]', '[OFF]'}}
+    {key = 'petSounds', name = "Pet Sounds", desc = "Should pets make noises?",
+        opts = {'[ALL]', '[NO STEPS]', '[NONE]'}},
+    {key = 'showCtrls', name = "Show Controls", desc = "Show the menu controls?",
+        opts = {'[SHOW]', '[HIDE]'}}
 }
 
 local OPEN_LENGTH = 8
 local MENU_BUTTON_MASK = (D_JPAD | U_JPAD | R_JPAD | L_JPAD | L_TRIG | R_TRIG)
 
 local MENU_BINDS = {R_JPAD, 0}
+
+local MOD_NAME = "WiddlePets v1.0"
 
 -- UTIL
 
@@ -58,10 +62,26 @@ end
 local TEX_CURSOR = get_texture_info('menu_cursor')
 local TEX_TAB_PETS = get_texture_info('menu_tab1')
 local TEX_TAB_SETTINGS = get_texture_info('menu_tab2')
+local TEX_CONTROLS = get_texture_info('menu_pad4')
+
+-- BOOT
+
+local bootMessageSent = false
+
+-- FUNCTIONS
 
 ---@param m MarioState
 hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
     if m.playerIndex ~= 0 then return end
+
+    if not bootMessageSent then
+        if petLocalSettings.menuBind == 1 then
+            djui_chat_message_create(MOD_NAME .. " is active! Use '/pet' or [DPAD-RIGHT] to open the menu!")
+        else
+            djui_chat_message_create(MOD_NAME .. " is active! Use '/pet' to open the menu!")
+        end
+        bootMessageSent = true
+    end
 
     if menu.open then
         -- calculate buttonPressed based on the recorded buttonDown value
@@ -103,18 +123,13 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                 else
                     local setting = settings[menu.curSetting]
                     local key = setting.key
-                    if setting.server then
-                        if not network_is_server() then
-                            play_sound(SOUND_MENU_CAMERA_BUZZ, gLakituState.pos)
-                        else
-                            gGlobalSyncTable[key] = gGlobalSyncTable[key] + 1
-                            if gGlobalSyncTable[key] > #setting.opts then gGlobalSyncTable[key] = 1 end
-                            mod_storage_save_number(key, gGlobalSyncTable[key])
-                        end
-                    else
-                        petLocalSettings[key] = petLocalSettings[key] + 1
-                        if petLocalSettings[key] > #setting.opts then petLocalSettings[key] = 1 end
-                        mod_storage_save_number(key, petLocalSettings[key])
+
+                    petLocalSettings[key] = petLocalSettings[key] + 1
+                    if petLocalSettings[key] > #setting.opts then petLocalSettings[key] = 1 end
+                    mod_storage_save_number(key, petLocalSettings[key])
+
+                    if setting.sync then
+                        gPlayerSyncTable[0][key] = petLocalSettings[key]
                     end
                 end
                 play_sound(SOUND_MENU_CLICK_FILE_SELECT, gLakituState.pos)
@@ -177,14 +192,17 @@ local function render_pet_menu()
     render_interpolated_rect(bgX, bgY, bgWidth, bgHeight)
 
     djui_hud_set_color(255, 255, 255, 255)
-    render_interpolated_text("WiddlePets v1.0", bgX + 4, bgY + 2, TEX_MED)
+    render_interpolated_text(MOD_NAME, bgX + 4, bgY + 2, TEX_MED)
     render_interpolated_rect(bgX + 2, bgY + 14, bgWidth - 4, 1)
     render_interpolated_rect(bgX + 2, bgY + 20 + (menu.listSize+1)*12, bgWidth - 4, 1)
 
-    --render_interpolated_texture(TEX_PAD_ALL, bgX + bgWidth - 8, bgY + bgHeight - 32, 0.7, 0.7)
+    if petLocalSettings.showCtrls == 1 then
+        render_interpolated_texture(TEX_CONTROLS, bgX + bgWidth - 2, bgY + bgHeight - 42, 0.7, 0.7)
+    end
 
     if menu.curTab == 0 then
         -- pets tab
+
         render_interpolated_texture(TEX_TAB_PETS, bgX + bgWidth - 52, bgY - 12, 0.7, 0.7)
         djui_hud_set_color(255, 255, 255, 150)
         render_interpolated_texture(TEX_TAB_SETTINGS, bgX + bgWidth - 28, bgY - 4, 0.7, 0.7)
@@ -257,6 +275,7 @@ local function render_pet_menu()
         end
     else
         -- settings tab
+
         render_interpolated_texture(TEX_TAB_SETTINGS, bgX + bgWidth - 28, bgY - 12, 0.7, 0.7)
         djui_hud_set_color(255, 255, 255, 150)
         render_interpolated_texture(TEX_TAB_PETS, bgX + bgWidth - 52, bgY - 4, 0.7, 0.7)
@@ -279,9 +298,6 @@ local function render_pet_menu()
 
                 render_interpolated_text(name, x, y, TEX_MED)
 
-                if not network_is_server() and settings[i].server then
-                    djui_hud_set_color(150, 150, 150, 255)
-                end
                 local key = gGlobalSyncTable[settings[i].key] or petLocalSettings[settings[i].key]
                 local status = settings[i].opts[key]
                 if status then

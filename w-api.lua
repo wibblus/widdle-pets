@@ -1,3 +1,5 @@
+if not SM64COOPDX_VERSION then return end
+
 _G.wpets = {}
 
 -- registers a new pet, and returns it's ID in the pet table
