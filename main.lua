@@ -496,16 +496,16 @@ local wpet_actions = {
                 o.oVelY = 0.0
                 -- jump while at an edge OR if height difference is great, and mario is close to the ground
                 if (o.oMoveFlags & OBJ_MOVE_HIT_EDGE ~= 0 or o.oPosY < m.pos.y - 300) and m.pos.y < m.floorHeight + 200 then
-                    local deltaFloorHeight = m.floorHeight - o.oFloorHeight
-                    o.oVelY = 20.0 * math.sqrt(maxf(0.75, deltaFloorHeight / 110.0))
+                    local deltaFloorHeight = m.floorHeight - o.oPosY
+                    o.oVelY = 20.0 * math.sqrt(clampf(deltaFloorHeight / 110.0, 0.75, 15.0))
                     o.oForwardVel = o.oForwardVel + minf(dist / 20, 45.0)
                     o.oMoveFlags = o.oMoveFlags | OBJ_MOVE_LEFT_GROUND
                 end
                 if o.oMoveFlags & OBJ_MOVE_HIT_WALL ~= 0 then
                     local floorDist = 30
-                    local deltaFloorHeight = find_floor_height(o.oPosX + sins(o.oFaceAngleYaw) * floorDist, o.oPosY + 200, o.oPosZ + coss(o.oFaceAngleYaw) * floorDist) - o.oFloorHeight
+                    local deltaFloorHeight = find_floor_height(o.oPosX + sins(o.oFaceAngleYaw) * floorDist, o.oPosY + 200, o.oPosZ + coss(o.oFaceAngleYaw) * floorDist) - o.oPosY
                     if math.abs(deltaFloorHeight) < 200 then
-                        o.oVelY = 20.0 * math.sqrt(maxf(0.75, deltaFloorHeight / 110.0))
+                        o.oVelY = 20.0 * math.sqrt(clampf(deltaFloorHeight / 110.0, 0.75, 15.0))
                         o.oForwardVel = 20.0
                         o.oMoveFlags = o.oMoveFlags | OBJ_MOVE_LEFT_GROUND
                     end
@@ -586,14 +586,22 @@ local wpet_actions = {
     [WPET_ACT_TELEPORT] = function (o, m, dist)
         wpet_drop(o)
 
-        local x = m.pos.x + sins(m.faceAngle.y - 0x4000) * 100.0
-        local z = m.pos.z + coss(m.faceAngle.y - 0x4000) * 100.0
+        -- alternate which side the pet attempts to spawn on
+        local offset
+        if o.oPetActTimer % 2 == 0 then
+            offset = m.faceAngle.y - 0x4000
+        else
+            offset = m.faceAngle.y + 0x4000
+        end
+
+        local x = m.pos.x + sins(offset) * 100.0
+        local z = m.pos.z + coss(offset) * 100.0
         local y = m.pos.y + 50.0
 
         o.oForwardVel = 0
         o.oVelY = 0
         -- check for a valid floor in the spawn pos and skip if not valid
-        if math.abs(find_floor_height(x, y, z) - m.pos.y) > 200 then return end
+        if math.abs(find_floor_height(x, y, z) - m.pos.y) > 200 then o.oPetActTimer = o.oPetActTimer + 1 return end
 
         if dist > 300 or dist < 30 then
             o.oPosX = x
