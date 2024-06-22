@@ -11,8 +11,8 @@ if not SM64COOPDX_VERSION then return end
 ---@field modelID ModelExtendedId|integer
 ---@field flying? boolean
 ---@field animPointer? Pointer_ObjectAnimPointer
----@field animList? string[]
----@field soundList? (integer|string|(integer|string)[])[] spawn, happy, ambient
+---@field animList? string[] idle, follow, petted, dance
+---@field soundList? (integer|string|(integer|string)[])[] spawn, happy, vanish, step
 ---@field scale? number
 ---@field yOffset? number
 ---@field credit string

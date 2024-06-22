@@ -879,7 +879,8 @@ local E_MODEL_MECHAKOOPA = smlua_model_util_get_id('mechak_pet_geo')
 local E_MODEL_FLYGUY_PET = smlua_model_util_get_id('flyguy_pet_geo')
 local E_MODEL_BOBBUDDY_PET = smlua_model_util_get_id('bobbuddy_pet_geo')
 
-local ID_HPG = _G.wpets.add_pet({name = "Headphone Goomba", credit = "wibblus, Nintendo",
+local ID_HPG = _G.wpets.add_pet({
+	name = "Headphone Goomba", credit = "wibblus, Nintendo",
 	description = "His tunes are the best in the mushroom kingdom.",
 	modelID = E_MODEL_HEADPHONE_GOOMBA,
 	scale = 0.74, yOffset = 0
@@ -891,7 +892,7 @@ _G.wpets.set_pet_anims(ID_HPG, {
 	dance = 'hp_goob_dance'
 })
 _G.wpets.set_pet_sounds(ID_HPG, {
-	spawn = 'goob_spawn.ogg',
+	spawn = {'goob_spawn.ogg', 'goob_happy.ogg'},
 	happy = 'goob_happy.ogg',
 	step = SOUND_OBJ_GOOMBA_WALK
 })
