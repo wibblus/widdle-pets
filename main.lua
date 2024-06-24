@@ -3,8 +3,6 @@
 -- description: lil pets to follow you while you go wahoo ! \n\n+API to make your own pets ! \n\n \\#d0a0f0\\-wibblus
 -- deluxe: true
 
-if not SM64COOPDX_VERSION then return end
-
 ---@class Pet
 ---@field name string
 ---@field description? string
@@ -31,8 +29,8 @@ if not SM64COOPDX_VERSION then return end
 
 ---@class PetSample
 ---@field name string|nil
+---@field petId integer|nil
 ---@field pos Vec3f|nil
----@field sample BassAudio|nil
 
 ---@type Object|nil
 local activePetObj
@@ -40,29 +38,42 @@ local activePetObj
 ---@type table<integer,PetSample>
 local gPetSamples = {}
 
-
 ---@type Pet[]
 petTable = {}
 -- <pet id, table of model ids>
 ---@type table<integer,ModelExtendedId[]>
 petAltModels = {}
 
+local PACKET_SPAWN_PET = 1
+
 ---- SETTINGS
+
+local SETTING_ON = 1
+local SETTING_OFF = 2
 
 local PET_BINDS = {Y_BUTTON, U_JPAD}
 
+local function load_setting(key, opts, default)
+    local setting = math.floor(mod_storage_load_number(key))
+    if setting <= 0 or setting > opts then
+        return default
+    else
+        return setting
+    end
+end
+
 -- local player settings
 petLocalSettings = {
-    grabAllowed = clamp(mod_storage_load_number('grabAllowed'), 1, 2),
-    throwAllowed = clamp(mod_storage_load_number('throwAllowed'), 1, 2),
-    kickAllowed = clamp(mod_storage_load_number('kickAllowed'), 1, 2),
-    menuBind = clamp(mod_storage_load_number('menuBind'), 1, 2),
-    petBind = clamp(mod_storage_load_number('petBind'), 1, 2),
-    petSounds = clamp(mod_storage_load_number('petSounds'), 1, 3),
-    showCtrls = clamp(mod_storage_load_number('showCtrls'), 1, 2),
+    intAllowed = load_setting('intAllowed', 2, 1),
+    protectPet = load_setting('protectPet', 2, 2),
+    menuBind = load_setting('menuBind', 2, 1),
+    petBind = load_setting('petBind', 2, 1),
+    petSounds = load_setting('petSounds', 3, 1),
+    showCtrls = load_setting('showCtrls', 2, 1),
 }
 
-gPlayerSyncTable[0].kickAllowed = petLocalSettings.kickAllowed
+-- this setting needs to be known by other clients
+gPlayerSyncTable[0].protectPet = petLocalSettings.protectPet
 
 ---- WPET BEHAVIOR SETUP
 
@@ -154,16 +165,8 @@ local function wpet_play_sound(o, sound)
             play_sound(s, o.header.gfx.cameraToObject)
         elseif typ == 'string' then
             -- sample
-            local index = network_local_index_from_global(o.globalPlayerIndex)
-            -- double triple check babey
-            if gPetSamples[index] and gPetSamples[index].sample then
-                if gPetSamples[index].sample.loaded then
-                    audio_sample_destroy(gPetSamples[index].sample)
-                end
-                gPetSamples[index].sample = nil
-            end
-
-            gPetSamples[index] = {name = s, pos = o.header.gfx.pos}
+            local index = o.globalPlayerIndex
+            gPetSamples[index] = {name = s, petId = o.oPetIndex, pos = o.header.gfx.pos}
             -- the sample is readied for the hooked function to play it
         end
     end
@@ -183,18 +186,24 @@ local function wpet_step_sounds(o)
     end
 end
 
+-- processes audio sample sound entries for a given pet. Should be called in HOOK_UPDATE.
 ---@param i integer
 function wpet_process_samples(i)
     for index, sample in pairs(gPetSamples) do
-        -- name is only not nil when the sample should be played
-        if sample.name and gPlayerSyncTable[index].activePet == i then
+        -- petId is only not nil when the sample should be played
+        if sample.petId == i then
             local bass = audio_sample_load(sample.name)
             audio_sample_play(bass, sample.pos, 1.0)
-            -- track the sample to destroy later
-            gPetSamples[index].sample = bass
-            gPetSamples[index].name = nil
+            -- destroy the sample
+            gPetSamples[index] = nil
+            audio_sample_destroy(bass)
         end
     end
+end
+
+-- returns the local player's pet object, if it exists
+function wpet_get_obj()
+    return activePetObj
 end
 
 ---@param o Object
@@ -221,30 +230,25 @@ local function wpet_modify(o, petIndex, altIndex)
     network_send_object(o, true)
 end
 
----@param m MarioState
-function despawn_player_pet(m)
-    gPlayerSyncTable[m.playerIndex].activePet = nil
-end
+local function wpet_spawn(petIndex, altIndex)
+    local m = gMarioStates[0]
 
----@param m MarioState
----@param petIndex? integer
-function spawn_player_pet(m, petIndex, altIndex)
     -- true if the supplied pet index is different from the active pet index
     local isPetChanged = false
     if petIndex then
-        isPetChanged = (gPlayerSyncTable[m.playerIndex].activePet ~= petIndex)
-        gPlayerSyncTable[m.playerIndex].activePet = petIndex
+        isPetChanged = (gPlayerSyncTable[0].activePet ~= petIndex)
+        gPlayerSyncTable[0].activePet = petIndex
     else
-        petIndex = gPlayerSyncTable[m.playerIndex].activePet
+        petIndex = gPlayerSyncTable[0].activePet
     end
     local pet = petTable[petIndex]
-    if not pet then return despawn_player_pet(m) end -- if pet is nil
+    if not pet then return despawn_player_pet(0) end -- if pet is nil
 
     if not altIndex then
-        altIndex = gPlayerSyncTable[m.playerIndex].activePetAlt or 0
+        altIndex = gPlayerSyncTable[0].activePetAlt or 0
     end
     if not petAltModels[petIndex] or isPetChanged then altIndex = 0 end
-    gPlayerSyncTable[m.playerIndex].activePetAlt = altIndex
+    gPlayerSyncTable[0].activePetAlt = altIndex
 
     -- stop if a pet object already exists for this player
     if activePetObj and get_id_from_behavior(activePetObj.behavior) == id_bhvWPet then
@@ -253,7 +257,7 @@ function spawn_player_pet(m, petIndex, altIndex)
 
     -- spawn the pet object and init stuff
     ---@param o Object
-    local obj = spawn_sync_object(id_bhvWPet, pet.modelID, m.pos.x, m.pos.y, m.pos.z, function (o)
+    local obj = spawn_sync_object(id_bhvWPet, petTable[petIndex].modelID, m.pos.x, m.pos.y, m.pos.z, function (o)
         -- match owner player index ; uses global index for matching recolors
         o.globalPlayerIndex = m.marioObj.globalPlayerIndex
         o.oPetIndex = petIndex
@@ -265,6 +269,21 @@ function spawn_player_pet(m, petIndex, altIndex)
         wpet_set_action(o, WPET_ACT_TELEPORT)
     end)
     activePetObj = obj
+end
+
+---@param mIndex integer
+function despawn_player_pet(mIndex)
+    gPlayerSyncTable[mIndex].activePet = nil
+end
+
+---@param mIndex integer
+---@param petIndex? integer
+---@param altIndex? integer
+function spawn_player_pet(mIndex, petIndex, altIndex)
+    if mIndex ~= 0 then
+        return network_send_to(mIndex, true, {id = PACKET_SPAWN_PET, pet = petIndex, alt = altIndex})
+    end
+    wpet_spawn(petIndex, altIndex)
 end
 
 ---- HOOKED FUNCTIONS
@@ -309,19 +328,14 @@ local function before_set_action(m, nextAct)
     end
 
     if nextAct == ACT_THROWING and m.heldObj and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
-        if m.controller.stickMag < 48 or petLocalSettings.throwAllowed == 2 then
+        if m.controller.stickMag < 48 then
             return ACT_PLACING_DOWN
-        end
-    elseif nextAct == ACT_AIR_THROW and m.heldObj and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
-        if petLocalSettings.throwAllowed == 2 then
-            wpet_drop(m.heldObj)
-            return ACT_FREEFALL
         end
     end
 end
 hook_event(HOOK_BEFORE_SET_MARIO_ACTION, before_set_action)
 
--- INTERACT
+---- INTERACT
 
 local interactActs = {
     [ACT_PUNCHING] = true, [ACT_MOVE_PUNCHING] = true, [ACT_DIVE] = true, [ACT_DIVE_SLIDE] = true, [ACT_JUMP_KICK] = true
@@ -340,28 +354,18 @@ local function allow_interact(m, o, type)
                 network_send_object(o, false)
             end
             return false
-        elseif m.action == ACT_JUMP_KICK then
-            if gPlayerSyncTable[network_local_index_from_global(o.globalPlayerIndex)].kickAllowed == 2 then
-                return false
-            end
-        elseif petLocalSettings.grabAllowed == 2 then
+        elseif petLocalSettings.intAllowed == 2
+        or (m.marioObj.globalPlayerIndex ~= o.globalPlayerIndex and gPlayerSyncTable[network_local_index_from_global(o.globalPlayerIndex)].protectPet == 1) then
             return false
         end
     end
 end
 hook_event(HOOK_ALLOW_INTERACT, allow_interact)
 
--- WARP / DISCONNECT STUFF
+---- WARP / DISCONNECT STUFF
 
 local function on_sync_valid()
     gPlayerSyncTable[0].warping = false
-    -- destroy previous loaded samples on sync
-    for i, sample in ipairs(gPetSamples) do
-        if sample.sample then
-            audio_sample_destroy(sample.sample)
-        end
-    end
-    gPetSamples = {}
 
     gPlayerSyncTable[0].activePetAlt = gPlayerSyncTable[0].activePetAlt or 0
 
@@ -370,7 +374,7 @@ local function on_sync_valid()
     if gPlayerSyncTable[0].activePet and m.area.camera then
         -- when loading a new area, the activePetObj reference changes; reset it
         activePetObj = nil
-        spawn_player_pet(m)
+        spawn_player_pet(0)
     end
 end
 hook_event(HOOK_ON_SYNC_VALID, on_sync_valid)
@@ -381,9 +385,18 @@ end
 hook_event(HOOK_ON_WARP, on_warp)
 
 local function on_disconnect(m)
-    despawn_player_pet(m)
+    despawn_player_pet(0)
 end
 hook_event(HOOK_ON_PLAYER_DISCONNECTED, on_disconnect)
+
+---- NETWORK
+
+local function on_packet_receive(data)
+    if data.id == PACKET_SPAWN_PET then
+        wpet_spawn(data.pet, data.alt)
+    end
+end
+hook_event(HOOK_ON_PACKET_RECEIVE, on_packet_receive)
 
 --
 
@@ -431,7 +444,7 @@ local function bhv_wpet_init(o)
 
     -- physics
     o.oBounciness       = 1.0
-    o.oDragStrength     = 5.0
+    o.oDragStrength     = 2.0
     o.oFriction         = 0.9
     o.oBuoyancy         = 0.0
     o.oWallHitboxRadius = 25.0
@@ -474,15 +487,25 @@ local wpet_actions = {
         o.oMoveAngleYaw = o.oFaceAngleYaw
 
         local yDist = math.abs(m.pos.y - o.oPosY)
+        local angleDiff = abs_angle_diff(o.oFaceAngleYaw, targetAngle)
 
-        local targetVel = 32.0 * (1.0 - minf(abs_angle_diff(o.oFaceAngleYaw, targetAngle) / 0x4000, 1.0)) * minf(dist / 800, 1.0)
-        --o.header.gfx.animInfo.animFrame = ((o.header.gfx.animInfo.animFrame << 8) + math.floor(o.oForwardVel) << 4) >> 8
+        local targetVel = 32.0 * (1.0 - minf(angleDiff / 0x4000, 1.0)) * minf(dist / 800, 1.0)
 
         if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 or m.action == ACT_FLYING then
             -- flying pet / swimming
 
             o.oForwardVel = approach_f32(o.oForwardVel, targetVel, 2.0, 4.0)
             o.oVelY = clampf((m.pos.y + 80 - o.oPosY) * 0.03, -10.0, 10.0)
+
+            if o.oMoveFlags & OBJ_MOVE_AT_WATER_SURFACE ~= 0 then
+                if dist < 300 then
+                    local deltaHeight = m.pos.y - o.oPosY
+                    o.oVelY = math.sqrt(2 * -o.oGravity * maxf(10.0, deltaHeight + 50))
+                    o.oMoveFlags = (o.oMoveFlags & ~OBJ_MOVE_MASK_IN_WATER) | OBJ_MOVE_LEAVING_WATER
+                else
+                    o.oVelY = minf(o.oVelY, 0)
+                end
+            end
 
             o.oPetTargetPitch = obj_pitch_to_object(o, m.marioObj) * 0.5
 
@@ -491,29 +514,20 @@ local wpet_actions = {
             if dist < 300 and yDist < 300 then return wpet_set_action(o, WPET_ACT_IDLE) end
         else
             -- walking pet
+
             if o.oMoveFlags & OBJ_MOVE_ON_GROUND ~= 0 then
                 o.oForwardVel = approach_f32(o.oForwardVel, targetVel, 2.0, 4.0)
                 o.oVelY = 0.0
-                -- jump while at an edge OR if height difference is great, and mario is close to the ground
-                if (o.oMoveFlags & OBJ_MOVE_HIT_EDGE ~= 0 or o.oPosY < m.pos.y - 300) and m.pos.y < m.floorHeight + 200 then
-                    local deltaFloorHeight = m.floorHeight - o.oPosY
-                    o.oVelY = 20.0 * math.sqrt(clampf(deltaFloorHeight / 110.0, 0.75, 15.0))
-                    o.oForwardVel = o.oForwardVel + minf(dist / 20, 45.0)
-                    o.oMoveFlags = o.oMoveFlags | OBJ_MOVE_LEFT_GROUND
-                end
-                if o.oMoveFlags & OBJ_MOVE_HIT_WALL ~= 0 then
-                    local floorDist = 30
-                    local deltaFloorHeight = find_floor_height(o.oPosX + sins(o.oFaceAngleYaw) * floorDist, o.oPosY + 200, o.oPosZ + coss(o.oFaceAngleYaw) * floorDist) - o.oPosY
-                    if math.abs(deltaFloorHeight) < 200 then
-                        o.oVelY = 20.0 * math.sqrt(clampf(deltaFloorHeight / 110.0, 0.75, 15.0))
-                        o.oForwardVel = 20.0
+                -- jump while at an edge OR if path to owner is blocked, and owner is close to the ground
+                if m.pos.y < m.floorHeight + 200 and angleDiff < 0x2000 then
+                    local hit = collision_find_surface_on_ray(o.oPosX, o.oPosY+30, o.oPosZ, m.pos.x-o.oPosX, m.pos.y-o.oPosY, m.pos.z-o.oPosZ)
+                    if o.oMoveFlags & OBJ_MOVE_HIT_EDGE ~= 0 or (hit.surface and hit.surface.normal.y < 0.1) then
+                        local deltaFloorHeight = m.floorHeight - o.oPosY
+                        o.oForwardVel = minf(dist / 25, 50.0)
+                        o.oVelY = math.sqrt(2 * -o.oGravity * maxf(10.0, deltaFloorHeight + 50 + (o.oForwardVel^2)/3))
+
                         o.oMoveFlags = o.oMoveFlags | OBJ_MOVE_LEFT_GROUND
                     end
-                end
-                -- ???
-                if o.oMoveFlags & OBJ_MOVE_AT_WATER_SURFACE ~= 0 then
-                    local deltaHeight = m.pos.y - o.oPosY
-                    o.oVelY = 20.0 * math.sqrt(maxf(0.0, deltaHeight / 100.0))
                 end
 
                 if o.oFloor then
@@ -526,10 +540,15 @@ local wpet_actions = {
 
                 if dist < 300 and yDist < 300 then return wpet_set_action(o, WPET_ACT_IDLE) end
             else
-                o.oForwardVel = approach_f32(o.oForwardVel, targetVel, 2.0, 2.0)
-
-                if o.oMoveFlags & OBJ_MOVE_LEFT_GROUND ~= 0 then
-                    o.oVelY = maxf(20.0, o.oVelY)
+                -- only slow down in the air IF a floor is near
+                if o.oPosY - o.oFloorHeight < 300 then
+                    o.oForwardVel = approach_f32(o.oForwardVel, targetVel, 2.0, 2.0)
+                else
+                    o.oForwardVel = approach_f32(o.oForwardVel, targetVel, 2.0, 0.0)
+                end
+                -- no shooting into the stratosphere
+                if o.oPosY > m.pos.y + 100 then
+                    o.oVelY = approach_f32(o.oVelY, 0.0, 0.0, 1.0)
                 end
             end
         end
@@ -640,8 +659,6 @@ local wpet_actions = {
         end
     end,
     [WPET_ACT_DESPAWN] = function (o, m)
-        wpet_drop(o)
-
         spawn_mist_particles_with_sound(SOUND_GENERAL_VANISH_SFX)
         wpet_play_sound(o, 3)
 
@@ -673,19 +690,6 @@ local function bhv_wpet_loop(o)
             network_send_object(o, true)
         end
 
-        -- physics
-        cur_obj_move_standard(-80)
-        -- snap to floor if bouncing down a slope/stairs
-        if o.oMoveFlags & OBJ_MOVE_LEFT_GROUND ~= 0 and o.oVelY <= 2.0 and math.abs(o.oPosY - o.oFloorHeight) < 20.0 then
-            o.oMoveFlags = (o.oMoveFlags & ~(OBJ_MOVE_LEFT_GROUND | OBJ_MOVE_IN_AIR)) | OBJ_MOVE_ON_GROUND
-            o.oPosY = o.oFloorHeight
-        end
-        -- spish spash
-        if o.oMoveFlags & OBJ_MOVE_ENTERED_WATER ~= 0 then
-            spawn_non_sync_object(id_bhvWaterSplash, E_MODEL_WATER_SPLASH, o.oPosX, o.oPosY, o.oPosZ, function (splash)
-                obj_scale(splash, 0.5) end)
-            play_sound(SOUND_OBJ_DIVING_INTO_WATER, o.header.gfx.cameraToObject)
-        end
         -- collisions
         cur_obj_update_floor_and_resolve_wall_collisions(80)
 
@@ -694,6 +698,24 @@ local function bhv_wpet_loop(o)
         wpet_actions[o.oAction](o, m, dist, targetAngle)
 
         o.oFaceAnglePitch = approach_s16_asymptotic(o.oFaceAnglePitch, o.oPetTargetPitch, 3)
+
+        -- physics
+        cur_obj_move_standard(-80)
+        if o.oMoveFlags & OBJ_MOVE_LEFT_GROUND ~= 0 then
+            -- snap to floor if bouncing down a slope/stairs
+            if o.oVelY <= 2.0 and math.abs(o.oPosY - o.oFloorHeight) < 20.0 then
+                o.oMoveFlags = (o.oMoveFlags & ~(OBJ_MOVE_LEFT_GROUND | OBJ_MOVE_IN_AIR)) | OBJ_MOVE_ON_GROUND
+                o.oPosY = o.oFloorHeight
+            else
+                o.oVelY = maxf(20.0, o.oVelY)
+            end
+        end
+        -- spish spash
+        if o.oMoveFlags & OBJ_MOVE_ENTERED_WATER ~= 0 and o.oVelY < -20.0 then
+            spawn_non_sync_object(id_bhvWaterSplash, E_MODEL_WATER_SPLASH, o.oPosX, o.oPosY, o.oPosZ, function (splash)
+                obj_scale(splash, 0.5) end)
+            play_sound(SOUND_OBJ_DIVING_INTO_WATER, o.header.gfx.cameraToObject)
+        end
 
         if o.oFloor and math.abs(o.oPosY - o.oFloorHeight) <= 4.0 then
             -- update position for moving platforms
@@ -746,6 +768,7 @@ local function bhv_wpet_loop(o)
     -- despawn if the owner player should not have a pet OR player has left the pet's area
     if gPlayerSyncTable[m.playerIndex].activePet == nil or gPlayerSyncTable[m.playerIndex].warping then
         wpet_set_action(o, WPET_ACT_DESPAWN)
+        wpet_drop(o)
     end
 end
 id_bhvWPet = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_wpet_init, bhv_wpet_loop, 'bhvWPet')

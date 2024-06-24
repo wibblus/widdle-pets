@@ -1,5 +1,3 @@
-if not SM64COOPDX_VERSION then return end
-
 smlua_anim_util_register_animation('hp_goob_idle', 0, 0, 0, 0, 39,
 {
 	0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x02C5, 0x02B6, 0x028D, 
@@ -880,7 +878,7 @@ local E_MODEL_FLYGUY_PET = smlua_model_util_get_id('flyguy_pet_geo')
 local E_MODEL_BOBBUDDY_PET = smlua_model_util_get_id('bobbuddy_pet_geo')
 
 local ID_HPG = _G.wpets.add_pet({
-	name = "Headphone Goomba", credit = "wibblus, Nintendo",
+	name = "Headphone Goomba", credit = "wibblus",
 	description = "His tunes are the best in the mushroom kingdom.",
 	modelID = E_MODEL_HEADPHONE_GOOMBA,
 	scale = 0.74, yOffset = 0
@@ -916,7 +914,7 @@ _G.wpets.set_pet_sounds(ID_MECHAK, {
 })
 
 local ID_FLYGUY = _G.wpets.add_pet({
-	name = 'Fly Guy', credit = 'wibblus, Nintendo',
+	name = 'Fly Guy', credit = 'wibblus',
 	description = "Flying without a care in the world. Waaaow.",
 	modelID = E_MODEL_FLYGUY_PET,
 	scale = 0.76, yOffset = 0, flying = true
@@ -928,7 +926,7 @@ _G.wpets.set_pet_sounds(ID_FLYGUY, {
 })
 
 local ID_BOBBUDDY = _G.wpets.add_pet({
-	name = 'Bob-omb Buddy', credit = 'wibblus, Nintendo',
+	name = 'Bob-omb Buddy', credit = 'wibblus',
 	description = "They can't open the cannon for you, but they sure are cute!",
 	modelID = E_MODEL_BOBBUDDY_PET,
 	scale = 0.75, yOffset = 0
@@ -942,12 +940,9 @@ _G.wpets.set_pet_anims(ID_BOBBUDDY, {
 _G.wpets.set_pet_sounds(ID_BOBBUDDY, {
 	spawn = SOUND_OBJ_BOBOMB_BUDDY_TALK, 
 	happy = SOUND_OBJ_BOBOMB_BUDDY_TALK,
+	vanish = SOUND_GENERAL2_BOBOMB_EXPLOSION,
 	step = SOUND_OBJ_BOBOMB_WALK
 })
-
--- builtin model example
-
-
 
 -- required hook for sounds
 hook_event(HOOK_UPDATE, function ()

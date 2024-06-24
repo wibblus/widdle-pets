@@ -1,5 +1,3 @@
-if not SM64COOPDX_VERSION then return end
-
 ACT_PETTING = allocate_mario_action(ACT_GROUP_AUTOMATIC | ACT_FLAG_STATIONARY)
 
 ---@param m MarioState

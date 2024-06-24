@@ -1,5 +1,3 @@
-if not SM64COOPDX_VERSION then return end
-
 _G.wpets = {}
 
 -- registers a new pet, and returns it's ID in the pet table
@@ -34,9 +32,11 @@ end
 -- registers a specified model as an alt model for an existing pet
 ---@param i integer
 ---@param modelID integer|ModelExtendedId
+---@return integer
 function wpets.add_pet_alt(i, modelID)
     if petAltModels[i] == nil then petAltModels[i] = {} end
     table.insert(petAltModels[i], modelID)
+    return #petAltModels[i]
 end
 
 ---@param i integer
@@ -73,13 +73,19 @@ function wpets.set_pet_sounds(i, sounds)
     -- TODO: FUCK YOUUUUUUUUUU (edit: nevermind im so cool) (edit2: i will no longer use this hook method)
 end
 
--- obtain a field from a pet table entry (cannot obtain sounds or anims)
+-- obtain a field from a pet table entry
 ---@param i integer
 ---@param field string
 ---@return any
 function wpets.get_pet_field(i, field)
     local val = petTable[i][field]
-    if type(val) == 'table' then return nil end
+    if type(val) == 'table' then
+        local copy = {}
+        for j = 1, #val, 1 do
+            copy[j] = val[j]
+        end
+        return copy
+    end
     return val
 end
 
@@ -93,4 +99,12 @@ function wpets.get_index_from_name(name)
     return nil
 end
 
+wpets.get_pet_obj = wpet_get_obj
+wpets.spawn_pet = spawn_player_pet
+wpets.despawn_pet = despawn_player_pet
+
 wpets.process_pet_samples = wpet_process_samples
+
+wpets.hook_allow_menu = wpet_hook_allow_menu
+
+wpets.id_bhvWPet = id_bhvWPet

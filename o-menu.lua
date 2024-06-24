@@ -1,5 +1,3 @@
-if not SM64COOPDX_VERSION then return end
-
 local menu = {
     open = false,
     openTimer = 0, -- ranges 0 -> OPEN_LENGTH
@@ -16,14 +14,12 @@ local menu = {
 }
 
 local settings = {
-    {key = 'grabAllowed', name = "Grabbing", desc = "Are you able to pick up pets?",
+    {key = 'intAllowed', name = "Interactions", desc = "Are you able to interact with (grab/kick) pets?",
         opts = {'[ON]', '[OFF]'}},
-    {key = 'throwAllowed', name = "Throwing", desc = "Are you able to throw held pets?",
-        opts = {'[ON]', '[OFF]'}},
-    {key = 'kickAllowed', name = "Allow Kicks", desc = "Allow your pets to be kicked?", sync = true,
+    {key = 'protectPet', name = "Protect My Pet", desc = "Protects your pet from others' interactions.", sync = true,
         opts = {'[ON]', '[OFF]'}},
     {key = 'menuBind', name = "Menu Bind", desc = "The bind to open the pets menu.",
-        opts = {'[DPAD-RIGHT]', '[/pet ONLY]'}},
+        opts = {'[DPAD-RIGHT]', '[/wpets ONLY]'}},
     {key = 'petBind', name = "Petting Bind", desc = "The bind to pet/warp a pet.",
         opts = {'[Y]', '[DPAD-UP]'}},
     {key = 'petSounds', name = "Pet Sounds", desc = "Should pets make noises?",
@@ -31,6 +27,9 @@ local settings = {
     {key = 'showCtrls', name = "Show Controls", desc = "Show the menu controls?",
         opts = {'[SHOW]', '[HIDE]'}}
 }
+
+---@type function[]
+local allowMenuHooks = {}
 
 local OPEN_LENGTH = 8
 local MENU_BUTTON_MASK = (D_JPAD | U_JPAD | R_JPAD | L_JPAD | L_TRIG | R_TRIG)
@@ -52,6 +51,9 @@ local function render_interpolated_texture(texInfo, x, y, scaleW, scaleH)
 end
 
 local function open_pet_menu()
+    for i = 1, #allowMenuHooks, 1 do
+        if allowMenuHooks[i]() == false then return end
+    end
     menu.open = true
     menu.buttonDown = MENU_BUTTON_MASK
     play_sound(SOUND_MENU_CAMERA_ZOOM_IN, gLakituState.pos)
@@ -68,20 +70,22 @@ local TEX_CONTROLS = get_texture_info('menu_pad4')
 
 local bootMessageSent = false
 
+hook_event(HOOK_ON_LEVEL_INIT, function ()
+    if not bootMessageSent then
+        if petLocalSettings.menuBind == 1 then
+            djui_chat_message_create(MOD_NAME .. " is active! Use '/wpets' or [DPAD-RIGHT] to open the menu!")
+        else
+            djui_chat_message_create(MOD_NAME .. " is active! Use '/wpets' to open the menu!")
+        end
+        bootMessageSent = true
+    end
+end)
+
 -- FUNCTIONS
 
 ---@param m MarioState
 hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
     if m.playerIndex ~= 0 then return end
-
-    if not bootMessageSent then
-        if petLocalSettings.menuBind == 1 then
-            djui_chat_message_create(MOD_NAME .. " is active! Use '/pet' or [DPAD-RIGHT] to open the menu!")
-        else
-            djui_chat_message_create(MOD_NAME .. " is active! Use '/pet' to open the menu!")
-        end
-        bootMessageSent = true
-    end
 
     if menu.open then
         -- calculate buttonPressed based on the recorded buttonDown value
@@ -119,7 +123,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                             if altIndex > #altModels then altIndex = 0 end
                         end
                     end
-                    spawn_player_pet(m, petIndex, altIndex)
+                    spawn_player_pet(0, petIndex, altIndex)
                 else
                     local setting = settings[menu.curSetting]
                     local key = setting.key
@@ -249,7 +253,6 @@ local function render_pet_menu()
         end
 
         -- description + credit
-        --djui_hud_set_font(FONT_ALIASED)
         if menu.curPet > 0 then
             djui_hud_set_color(200, 200, 200, 255)
             local desc = (petTable[menu.curPet].description or "A cool lil pet.") .. " "
@@ -305,9 +308,22 @@ local function render_pet_menu()
                 end
             end
 
+            -- description
             djui_hud_set_color(200, 200, 200, 255)
-            local desc = settings[menu.curSetting].desc
-            render_interpolated_text(desc, bgX + 4, bgY + bgHeight - 24, TEX_SML)
+            local desc = settings[menu.curSetting].desc .. " "
+            local splitIndex = 1
+            while true do
+                local space = string.find(desc, ' ', splitIndex+1)
+                if space then
+                    if space > 42 then break
+                    else splitIndex = space end
+                else
+                    splitIndex = 40
+                    break
+                end
+            end
+            render_interpolated_text(string.sub(desc, 1, splitIndex), bgX + 4, bgY + bgHeight - 24, TEX_SML)
+            render_interpolated_text(string.sub(desc, splitIndex+1), bgX + 4, bgY + bgHeight - 16, TEX_SML)
         end
     end
 
@@ -348,14 +364,14 @@ hook_chat_command('pet', " [list/clear/pet_name]", function (msg)
         return true
 
     elseif msg == 'clear' then
-        despawn_player_pet(gMarioStates[0])
+        despawn_player_pet(0)
         return true
 
     elseif msg:len() > 0 then
         for i, pet in ipairs(petTable) do
             -- funy syntax ; first pet name to contain the arg
             if pet.name:lower():match(msg:lower()) then
-                spawn_player_pet(gMarioStates[0], i)
+                spawn_player_pet(0, i)
                 return true
             end
         end
@@ -367,6 +383,11 @@ hook_chat_command('pet', " [list/clear/pet_name]", function (msg)
     return false
 end)
 
+---- HOOK
+
+function wpet_hook_allow_menu(func)
+    table.insert(allowMenuHooks, func)
+end
 
 ---- CHAR SELECT COMPAT
 
