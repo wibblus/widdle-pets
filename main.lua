@@ -594,6 +594,8 @@ local wpet_actions = {
         o.oGravity = -1.4
         if o.oMoveFlags & OBJ_MOVE_HIT_WALL ~= 0 then
             o.oMoveAngleYaw = (o.oWallAngle + (o.oWallAngle - o.oMoveAngleYaw)) - 0x8000
+            o.oForwardVel = o.oForwardVel * 0.75
+            play_sound(SOUND_GENERAL_SOFT_LANDING, o.header.gfx.cameraToObject)
         end
         if o.oMoveFlags & (OBJ_MOVE_MASK_ON_GROUND | OBJ_MOVE_MASK_IN_WATER) ~= 0 then
             if petTable[o.oPetIndex].flying then o.oGravity = -0.1 else o.oGravity = -1.5 end
@@ -622,6 +624,7 @@ local wpet_actions = {
         -- check for a valid floor in the spawn pos and skip if not valid
         if math.abs(find_floor_height(x, y, z) - m.pos.y) > 200 then o.oPetActTimer = o.oPetActTimer + 1 return end
 
+
         if dist > 300 or dist < 30 then
             o.oPosX = x
             o.oPosY = y
@@ -632,7 +635,10 @@ local wpet_actions = {
             -- used when pet is already idle and not being held
             o.oPosY = o.oPosY + 30
         end
+
         o.oMoveFlags = OBJ_MOVE_IN_AIR
+
+        cur_obj_update_floor()
 
         -- model handling
         if o.oPetAlt ~= 0 then
@@ -685,13 +691,14 @@ local function bhv_wpet_loop(o)
             o.oForwardVel = gServerSettings.playerKnockbackStrength * 1.75
             o.oVelY = gServerSettings.playerKnockbackStrength + 10.0
             o.oInteractStatus = 0
+            o.oMoveFlags = OBJ_MOVE_IN_AIR
             wpet_set_action(o, WPET_ACT_BOUNCE)
             wpet_play_sound(o, 2)
             network_send_object(o, true)
         end
 
         -- collisions
-        cur_obj_update_floor_and_resolve_wall_collisions(80)
+        cur_obj_update_floor_and_resolve_wall_collisions(90)
 
         o.oPetTargetPitch = 0
         -- action switch statement

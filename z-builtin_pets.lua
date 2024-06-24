@@ -910,6 +910,7 @@ _G.wpets.set_pet_anims(ID_MECHAK, {
 _G.wpets.set_pet_sounds(ID_MECHAK, {
 	spawn = SOUND_AIR_BOBOMB_LIT_FUSE,
 	happy = SOUND_OBJ_HEAVEHO_TOSSED,
+	vanish = SOUND_GENERAL2_BOBOMB_EXPLOSION,
 	step = SOUND_AIR_HEAVEHO_MOVE
 })
 
