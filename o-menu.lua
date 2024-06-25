@@ -366,7 +366,7 @@ end)
 
 ---- COMMAND
 
-hook_chat_command('pet', " [list/clear/pet_name]", function (msg)
+hook_chat_command('wpets', " [list/clear/pet_name]", function (msg)
     if msg == 'list' then
         local list = ""
         for i, pet in ipairs(petTable) do

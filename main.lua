@@ -395,6 +395,7 @@ end
 hook_event(HOOK_ON_WARP, on_warp)
 
 local function on_disconnect(m)
+    if m.playerIndex ~= 0 then return end
     despawn_player_pet(0)
 end
 hook_event(HOOK_ON_PLAYER_DISCONNECTED, on_disconnect)
