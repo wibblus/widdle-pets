@@ -1,3 +1,6 @@
+local table_insert,pairs,ipairs,type,to_lower
+    = table.insert,pairs,ipairs,type,string.lower
+
 _G.wpets = {}
 
 -- registers a new pet, and returns it's ID in the pet table
@@ -13,7 +16,7 @@ function wpets.add_pet(petInfo)
 
     petInfo.scale = petInfo.scale or 1.0
     petInfo.yOffset = petInfo.yOffset or 0
-    table.insert(petTable, petInfo)
+    table_insert(petTable, petInfo)
     return #petTable
 end
 
@@ -35,7 +38,7 @@ end
 ---@return integer
 function wpets.add_pet_alt(i, modelID)
     if petAltModels[i] == nil then petAltModels[i] = {} end
-    table.insert(petAltModels[i], modelID)
+    table_insert(petAltModels[i], modelID)
     return #petAltModels[i]
 end
 
@@ -94,7 +97,7 @@ end
 function wpets.get_index_from_name(name)
     if type(name) ~= 'string' then return nil end
     for i, pet in ipairs(petTable) do
-        if pet.name:lower() == name:lower() then return i end
+        if to_lower(pet.name) == to_lower(name) then return i end
     end
     return nil
 end
