@@ -48,9 +48,6 @@ local PACKET_SPAWN_PET = 1
 
 ---- SETTINGS
 
-local SETTING_ON = 1
-local SETTING_OFF = 2
-
 local PET_BINDS = {Y_BUTTON, U_JPAD}
 
 local function load_setting(key, opts, default)
@@ -62,11 +59,16 @@ local function load_setting(key, opts, default)
     end
 end
 
+-- clear saved settings from v1.0
+if mod_storage_load_number('grabAllowed') ~= 0 then
+    mod_storage_clear()
+end
+
 -- local player settings
 petLocalSettings = {
     intAllowed = load_setting('intAllowed', 2, 1),
     protectPet = load_setting('protectPet', 2, 2),
-    menuBind = load_setting('menuBind', 2, 1),
+    menuBind = load_setting('menuBind', 4, 2),
     petBind = load_setting('petBind', 2, 1),
     petSounds = load_setting('petSounds', 3, 1),
     showCtrls = load_setting('showCtrls', 2, 1),
@@ -490,6 +492,9 @@ local wpet_actions = {
         local angleDiff = abs_angle_diff(o.oFaceAngleYaw, targetAngle)
 
         local targetVel = 32.0 * (1.0 - minf(angleDiff / 0x4000, 1.0)) * minf(dist / 800, 1.0)
+        if m.action & ACT_FLAG_BUTT_OR_STOMACH_SLIDE ~= 0 then
+            targetVel = targetVel * 1.5
+        end
 
         if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 or m.action == ACT_FLYING then
             -- flying pet / swimming

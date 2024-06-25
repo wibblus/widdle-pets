@@ -15,17 +15,17 @@ local menu = {
 
 local settings = {
     {key = 'intAllowed', name = "Interactions", desc = "Are you able to interact with (grab/kick) pets?",
-        opts = {'[ON]', '[OFF]'}},
+    opts = {'[ON]', '[OFF]'}},
     {key = 'protectPet', name = "Protect My Pet", desc = "Protects your pet from others' interactions.", sync = true,
-        opts = {'[ON]', '[OFF]'}},
-    {key = 'menuBind', name = "Menu Bind", desc = "The bind to open the pets menu.",
-        opts = {'[DPAD-RIGHT]', '[/wpets ONLY]'}},
-    {key = 'petBind', name = "Petting Bind", desc = "The bind to pet/warp a pet.",
-        opts = {'[Y]', '[DPAD-UP]'}},
+    opts = {'[ON]', '[OFF]'}},
+    {key = 'menuBind', name = "Menu Bind", desc = "The button bind to open the pets menu. ('/wpets' can always be used)",
+    opts = {'[NONE]', '[DPAD-RIGHT]', '[PAUSE+Y]', '[PAUSE+L]'}},
+    {key = 'petBind', name = "Petting Bind", desc = "The button bind to pet/warp a pet.",
+    opts = {'[Y]', '[DPAD-UP]'}},
     {key = 'petSounds', name = "Pet Sounds", desc = "Should pets make noises?",
-        opts = {'[ALL]', '[NO STEPS]', '[NONE]'}},
+    opts = {'[ALL]', '[NO STEPS]', '[NONE]'}},
     {key = 'showCtrls', name = "Show Controls", desc = "Show the menu controls?",
-        opts = {'[SHOW]', '[HIDE]'}}
+    opts = {'[SHOW]', '[HIDE]'}}
 }
 
 ---@type function[]
@@ -34,11 +34,11 @@ local allowMenuHooks = {}
 local OPEN_LENGTH = 8
 local MENU_BUTTON_MASK = (D_JPAD | U_JPAD | R_JPAD | L_JPAD | L_TRIG | R_TRIG)
 
-local MENU_BINDS = {R_JPAD, 0}
+local MENU_BINDS = {0, R_JPAD, Y_BUTTON, L_TRIG}
 
-local MOD_NAME = "WiddlePets v1.0"
+local MOD_NAME = "WiddlePets v1.1"
 
--- UTIL
+---- UTIL
 
 local function render_interpolated_rect(x, y, width, height)
     djui_hud_render_rect_interpolated(x - menu.interpX, y, width, height, x, y, width, height)
@@ -54,34 +54,38 @@ local function open_pet_menu()
     for i = 1, #allowMenuHooks, 1 do
         if allowMenuHooks[i]() == false then return end
     end
+    -- unpause
+    if is_game_paused() then gMarioStates[0].controller.buttonPressed = START_BUTTON end
+    -- match menu controls to avoid a false button press
+    menu.buttonDown = gMarioStates[0].controller.buttonDown
+
     menu.open = true
-    menu.buttonDown = MENU_BUTTON_MASK
-    play_sound(SOUND_MENU_CAMERA_ZOOM_IN, gLakituState.pos)
+    play_sound(SOUND_MENU_CAMERA_ZOOM_IN, gGlobalSoundSource)
 end
 
--- TEXTURES
+---- TEXTURES
 
 local TEX_CURSOR = get_texture_info('menu_cursor')
 local TEX_TAB_PETS = get_texture_info('menu_tab1')
 local TEX_TAB_SETTINGS = get_texture_info('menu_tab2')
 local TEX_CONTROLS = get_texture_info('menu_pad4')
 
--- BOOT
+---- BOOT
 
 local bootMessageSent = false
 
 hook_event(HOOK_ON_LEVEL_INIT, function ()
     if not bootMessageSent then
         if petLocalSettings.menuBind == 1 then
-            djui_chat_message_create(MOD_NAME .. " is active! Use '/wpets' or [DPAD-RIGHT] to open the menu!")
-        else
             djui_chat_message_create(MOD_NAME .. " is active! Use '/wpets' to open the menu!")
+        else
+            djui_chat_message_create(MOD_NAME .. " is active! Use '/wpets' or " .. settings[3].opts[petLocalSettings.menuBind] .. " to open the menu!")
         end
         bootMessageSent = true
     end
 end)
 
--- FUNCTIONS
+---- FUNCTIONS
 
 ---@param m MarioState
 hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
@@ -93,9 +97,10 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
         -- update recorded buttonDown
         menu.buttonDown = m.controller.buttonDown
 
-        -- wacky held U/D input handling
+        -- wacky held U/D input handling. inputLock counter starts at -5 for a short delay
         if buttonPressed & (U_JPAD | D_JPAD) ~= 0 then menu.inputLock = -5 end
 
+        -- "repress" the direction button every 3 frames
         if menu.buttonDown & (U_JPAD | D_JPAD) ~= 0 and not (menu.curPet == 0 or menu.curPet == #petTable) then
             menu.inputLock = menu.inputLock + 1
             if menu.inputLock > 0 and menu.inputLock % 3 == 0 then buttonPressed = buttonPressed | (menu.buttonDown & (U_JPAD | D_JPAD)) end
@@ -106,7 +111,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                 -- exit
                 menu.open = false
                 if buttonPressed & START_BUTTON ~= 0 then menu.openTimer = 0 end
-                play_sound(SOUND_MENU_CAMERA_ZOOM_OUT, gLakituState.pos)
+                play_sound(SOUND_MENU_CAMERA_ZOOM_OUT, gGlobalSoundSource)
             elseif buttonPressed & R_JPAD ~= 0 then
                 -- select
                 if menu.curTab == 0 then
@@ -136,7 +141,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                         gPlayerSyncTable[0][key] = petLocalSettings[key]
                     end
                 end
-                play_sound(SOUND_MENU_CLICK_FILE_SELECT, gLakituState.pos)
+                play_sound(SOUND_MENU_CLICK_FILE_SELECT, gGlobalSoundSource)
             elseif buttonPressed & U_JPAD ~= 0 then
                 -- up
                 if menu.curTab == 0 then
@@ -148,7 +153,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                     if menu.curSetting < 1 then menu.curSetting = #settings end
                 end
                 menu.scrollDir = -1
-                play_sound(SOUND_MENU_MESSAGE_NEXT_PAGE, gLakituState.pos)
+                play_sound(SOUND_MENU_MESSAGE_NEXT_PAGE, gGlobalSoundSource)
             elseif buttonPressed & D_JPAD ~= 0 then
                 -- down
                 if menu.curTab == 0 then
@@ -160,18 +165,19 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
                     if menu.curSetting > #settings then menu.curSetting = 1 end
                 end
                 menu.scrollDir = 1
-                play_sound(SOUND_MENU_MESSAGE_NEXT_PAGE, gLakituState.pos)
+                play_sound(SOUND_MENU_MESSAGE_NEXT_PAGE, gGlobalSoundSource)
             elseif buttonPressed & (R_TRIG | L_TRIG) ~= 0 then
                 -- tab change; L and R do the same thing because there's only two tabs, i'm so cheeky
                 menu.curTab = 1 - menu.curTab
-                play_sound(SOUND_MENU_CHANGE_SELECT, gLakituState.pos)
+                play_sound(SOUND_MENU_CHANGE_SELECT, gGlobalSoundSource)
             end
         end
         -- disable controls used by the menu
         m.controller.buttonPressed = m.controller.buttonPressed & ~MENU_BUTTON_MASK
         m.controller.buttonDown = m.controller.buttonDown & ~MENU_BUTTON_MASK
-    elseif not is_game_paused() then
+    else
         if m.controller.buttonPressed & MENU_BINDS[petLocalSettings.menuBind] ~= 0 then
+            if petLocalSettings.menuBind ~= 2 and not is_game_paused() then return end
             open_pet_menu()
         end
     end
@@ -283,48 +289,49 @@ local function render_pet_menu()
         djui_hud_set_color(255, 255, 255, 150)
         render_interpolated_texture(TEX_TAB_PETS, bgX + bgWidth - 52, bgY - 4, 0.7, 0.7)
 
-        -- render differently for players who can change settings vs can't
-        do
-            for i = 1, #settings, 1 do
-                local name = settings[i].name
-                local x = bgX + 8
-                local y = bgY + 18 + (i-1)*12
+        for i = 1, #settings, 1 do
+            local name = settings[i].name
+            local x = bgX + 4
+            local y = bgY + 18 + (i-1)*12
 
-                if menu.curSetting == i then
-                    djui_hud_set_color(255, 255, 255, 255)
-                    local cursorX = bgX + bgWidth - 12
-                    local prevY = y - (menu.scrollDir*12)
-                    djui_hud_render_texture_interpolated(TEX_CURSOR, cursorX - menu.interpX, prevY, 0.7, 0.7, cursorX, y, 0.7, 0.7)
-                else
-                    djui_hud_set_color(150, 150, 150, 255)
-                end
+            local statusX = 8
 
-                render_interpolated_text(name, x, y, TEX_MED)
-
-                local key = gGlobalSyncTable[settings[i].key] or petLocalSettings[settings[i].key]
-                local status = settings[i].opts[key]
-                if status then
-                    render_interpolated_text(status, bgX + bgWidth - 12 - djui_hud_measure_text(status)*TEX_MED, y, TEX_MED)
-                end
+            if menu.curSetting == i then
+                djui_hud_set_color(255, 255, 255, 255)
+                local cursorX = bgX + bgWidth - 12
+                local prevY = y - (menu.scrollDir*12)
+                djui_hud_render_texture_interpolated(TEX_CURSOR, cursorX - menu.interpX, prevY, 0.7, 0.7, cursorX, y, 0.7, 0.7)
+                statusX = 12
+            else
+                djui_hud_set_color(150, 150, 150, 255)
             end
 
-            -- description
-            djui_hud_set_color(200, 200, 200, 255)
-            local desc = settings[menu.curSetting].desc .. " "
-            local splitIndex = 1
-            while true do
-                local space = string.find(desc, ' ', splitIndex+1)
-                if space then
-                    if space > 42 then break
-                    else splitIndex = space end
-                else
-                    splitIndex = 40
-                    break
-                end
+            render_interpolated_text(name, x, y, TEX_MED)
+
+            local key = gGlobalSyncTable[settings[i].key] or petLocalSettings[settings[i].key]
+            local status = settings[i].opts[key]
+            if status then
+                render_interpolated_text(status, bgX + bgWidth - statusX - djui_hud_measure_text(status)*TEX_MED, y, TEX_MED)
             end
-            render_interpolated_text(string.sub(desc, 1, splitIndex), bgX + 4, bgY + bgHeight - 24, TEX_SML)
-            render_interpolated_text(string.sub(desc, splitIndex+1), bgX + 4, bgY + bgHeight - 16, TEX_SML)
         end
+
+        -- description
+        djui_hud_set_color(200, 200, 200, 255)
+        local desc = settings[menu.curSetting].desc .. " "
+        local splitIndex = 1
+        while true do
+            local space = string.find(desc, ' ', splitIndex+1)
+            if space then
+                if space > 42 then break
+                else splitIndex = space end
+            else
+                splitIndex = 40
+                break
+            end
+        end
+        render_interpolated_text(string.sub(desc, 1, splitIndex), bgX + 4, bgY + bgHeight - 24, TEX_SML)
+        render_interpolated_text(string.sub(desc, splitIndex+1), bgX + 4, bgY + bgHeight - 16, TEX_SML)
+
     end
 
     djui_hud_set_color(0, 0, 0, 255)
@@ -342,14 +349,14 @@ hook_event(HOOK_ON_HUD_RENDER_BEHIND, function ()
     elseif menu.openTimer > 0 then
         menu.openTimer = menu.openTimer - 1
         render_pet_menu()
-    --[[
+        --[[
     else
         djui_hud_set_color(255, 255, 255, 255)
         djui_hud_set_resolution(RESOLUTION_N64)
         djui_hud_render_texture(TEX_PAD_R, 0, djui_hud_get_screen_height() - 64, 1, 1)
-    --]]
+        --]]
     end
-    
+
 end)
 
 ---- COMMAND

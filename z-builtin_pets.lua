@@ -899,7 +899,7 @@ local ID_MECHAK = _G.wpets.add_pet({
 	name = "Mechakoopa", credit = "wibblus",
 	description = "What an explosive friend! Up to mischief!",
 	modelID = E_MODEL_MECHAKOOPA,
-	scale = 0.84, yOffset = 3
+	scale = 0.84
 })
 _G.wpets.set_pet_anims(ID_MECHAK, {
 	idle = 'mechak_idle',
