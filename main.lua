@@ -46,12 +46,18 @@ petAltModels = {}
 
 local PACKET_SPAWN_PET = 1
 
+---- LOCALIZED FUNCTIONS
+
+local abs, sqrt, floor, random = math.abs, math.sqrt, math.floor, math.random
+local random_linear_offset,mario_drop_held_object,obj_become_tangible,set_mario_action,smlua_anim_util_set_animation,obj_init_animation,play_sound,audio_sample_load,audio_sample_play,audio_sample_destroy,obj_scale,network_send_to,network_send_object,get_id_from_behavior,spawn_sync_object,obj_get_nearest_object_with_behavior_id,dist_between_objects,lateral_dist_between_objects,obj_angle_to_object,abs_angle_diff,drop_and_set_mario_action,network_local_index_from_global,obj_set_model_extended,approach_f32,approach_f32_symmetric,approach_s16_symmetric,approach_s16_asymptotic,minf,maxf,clampf,obj_pitch_to_object,atan2s,sins,coss,collision_find_surface_on_ray,find_floor_height,cur_obj_update_floor,cur_obj_update_floor_and_resolve_wall_collisions,cur_obj_move_standard,nearest_mario_state_to_object,vec3f_rotate_zxy,cur_obj_set_pos_relative,cur_obj_move_after_thrown_or_dropped,cur_obj_disable_rendering,cur_obj_become_intangible,cur_obj_become_tangible,spawn_non_sync_object,spawn_mist_particles,spawn_mist_particles_with_sound,obj_mark_for_deletion
+    = random_linear_offset,mario_drop_held_object,obj_become_tangible,set_mario_action,smlua_anim_util_set_animation,obj_init_animation,play_sound,audio_sample_load,audio_sample_play,audio_sample_destroy,obj_scale,network_send_to,network_send_object,get_id_from_behavior,spawn_sync_object,obj_get_nearest_object_with_behavior_id,dist_between_objects,lateral_dist_between_objects,obj_angle_to_object,abs_angle_diff,drop_and_set_mario_action,network_local_index_from_global,obj_set_model_extended,approach_f32,approach_f32_symmetric,approach_s16_symmetric,approach_s16_asymptotic,minf,maxf,clampf,obj_pitch_to_object,atan2s,sins,coss,collision_find_surface_on_ray,find_floor_height,cur_obj_update_floor,cur_obj_update_floor_and_resolve_wall_collisions,cur_obj_move_standard,nearest_mario_state_to_object,vec3f_rotate_zxy,cur_obj_set_pos_relative,cur_obj_move_after_thrown_or_dropped,cur_obj_disable_rendering,cur_obj_become_intangible,cur_obj_become_tangible,spawn_non_sync_object,spawn_mist_particles,spawn_mist_particles_with_sound,obj_mark_for_deletion
+
 ---- SETTINGS
 
 local PET_BINDS = {Y_BUTTON, U_JPAD}
 
 local function load_setting(key, opts, default)
-    local setting = math.floor(mod_storage_load_number(key))
+    local setting = floor(mod_storage_load_number(key))
     if setting <= 0 or setting > opts then
         return default
     else
@@ -158,7 +164,7 @@ local function wpet_play_sound(o, sound)
 
         if typ == 'table' then
             -- handler for sound arrays
-            s = s[math.random(#s)]
+            s = s[random(#s)]
             typ = type(s)
         end
 
@@ -294,11 +300,12 @@ end
 local function mario_update(m)
     if m.playerIndex ~= 0 then return end
 
-    if m.controller.buttonPressed & PET_BINDS[petLocalSettings.petBind] ~= 0 and (m.action == ACT_IDLE or m.action == ACT_WALKING) then
+    if m.controller.buttonPressed & PET_BINDS[petLocalSettings.petBind] ~= 0 then
         local o = obj_get_nearest_object_with_behavior_id(m.marioObj, id_bhvWPet)
         local dist = dist_between_objects(m.marioObj, o)
-        local angleTo = mario_obj_angle_to_object(m, o)
-        if o and o.oIntangibleTimer == 0 and dist < 150 and abs_angle_diff(m.faceAngle.y, angleTo) < 0x5000 then
+        local angleTo = obj_angle_to_object(m.marioObj, o)
+        if (m.action == ACT_IDLE or m.action == ACT_WALKING)
+        and o and o.oIntangibleTimer == 0 and dist < 150 and abs_angle_diff(m.faceAngle.y, angleTo) < 0x5000 then
             m.faceAngle.y = angleTo
             set_mario_action(m, ACT_PETTING, o.globalPlayerIndex)
 
@@ -327,6 +334,7 @@ local function before_set_action(m, nextAct)
 
     if m.action == ACT_TELEPORT_FADE_IN then
         gPlayerSyncTable[0].warping = false
+        spawn_player_pet(0)
     end
 
     if nextAct == ACT_THROWING and m.heldObj and get_id_from_behavior(m.heldObj.behavior) == id_bhvWPet then
@@ -470,7 +478,7 @@ local wpet_actions = {
             if o.oMoveFlags & OBJ_MOVE_ON_GROUND ~= 0 then o.oVelY = 0.0 end
         end
 
-        local yDist = math.abs(m.pos.y - o.oPosY)
+        local yDist = abs(m.pos.y - o.oPosY)
 
 
         if danceActs[m.action] then
@@ -488,13 +496,15 @@ local wpet_actions = {
         o.oFaceAngleYaw = approach_s16_symmetric(o.oFaceAngleYaw, targetAngle, 0x400)
         o.oMoveAngleYaw = o.oFaceAngleYaw
 
-        local yDist = math.abs(m.pos.y - o.oPosY)
+        local yDist = abs(m.pos.y - o.oPosY)
         local angleDiff = abs_angle_diff(o.oFaceAngleYaw, targetAngle)
+        local angleDiffFac = 1.0 - minf(angleDiff / 0x4000, 1.0)
 
-        local targetVel = 32.0 * (1.0 - minf(angleDiff / 0x4000, 1.0)) * minf(dist / 800, 1.0)
+        local targetVel = 32.0 * angleDiffFac * minf(dist / 800, 1.0)
         if m.action & ACT_FLAG_BUTT_OR_STOMACH_SLIDE ~= 0 then
-            targetVel = targetVel * 1.5
+            targetVel = maxf(targetVel, abs(m.forwardVel) * angleDiffFac)
         end
+
 
         if petTable[o.oPetIndex].flying or o.oMoveFlags & OBJ_MOVE_MASK_IN_WATER ~= 0 or m.action == ACT_FLYING then
             -- flying pet / swimming
@@ -505,14 +515,14 @@ local wpet_actions = {
             if o.oMoveFlags & OBJ_MOVE_AT_WATER_SURFACE ~= 0 then
                 if dist < 300 then
                     local deltaHeight = m.pos.y - o.oPosY
-                    o.oVelY = math.sqrt(2 * -o.oGravity * maxf(10.0, deltaHeight + 50))
+                    o.oVelY = sqrt(2 * -o.oGravity * maxf(10.0, deltaHeight + 50))
                     o.oMoveFlags = (o.oMoveFlags & ~OBJ_MOVE_MASK_IN_WATER) | OBJ_MOVE_LEAVING_WATER
                 else
                     o.oVelY = minf(o.oVelY, 0)
                 end
             end
 
-            o.oPetTargetPitch = obj_pitch_to_object(o, m.marioObj) * 0.5
+            o.oPetTargetPitch = obj_pitch_to_object(o, m.marioObj) * 0.6
 
             wpet_step_sounds(o)
 
@@ -529,7 +539,7 @@ local wpet_actions = {
                     if o.oMoveFlags & OBJ_MOVE_HIT_EDGE ~= 0 or (hit.surface and hit.surface.normal.y < 0.1) then
                         local deltaFloorHeight = m.floorHeight - o.oPosY
                         o.oForwardVel = minf(dist / 25, 50.0)
-                        o.oVelY = math.sqrt(2 * -o.oGravity * maxf(10.0, deltaFloorHeight + 50 + (o.oForwardVel^2)/3))
+                        o.oVelY = sqrt(2 * -o.oGravity * maxf(10.0, deltaFloorHeight + 50 + (o.oForwardVel^2)/3))
 
                         o.oMoveFlags = o.oMoveFlags | OBJ_MOVE_LEFT_GROUND
                     end
@@ -627,10 +637,10 @@ local wpet_actions = {
         o.oForwardVel = 0
         o.oVelY = 0
         -- check for a valid floor in the spawn pos and skip if not valid
-        if math.abs(find_floor_height(x, y, z) - m.pos.y) > 200 then o.oPetActTimer = o.oPetActTimer + 1 return end
+        if abs(find_floor_height(x, y, z) - m.pos.y) > 200 then o.oPetActTimer = o.oPetActTimer + 1 return end
 
 
-        if dist > 300 or dist < 30 then
+        if dist > 300 or dist < 25 or abs(o.oPosY - y) > 300 then
             o.oPosX = x
             o.oPosY = y
             o.oPosZ = z
@@ -715,7 +725,7 @@ local function bhv_wpet_loop(o)
         cur_obj_move_standard(-80)
         if o.oMoveFlags & OBJ_MOVE_LEFT_GROUND ~= 0 then
             -- snap to floor if bouncing down a slope/stairs
-            if o.oVelY <= 2.0 and math.abs(o.oPosY - o.oFloorHeight) < 20.0 then
+            if o.oVelY <= 2.0 and abs(o.oPosY - o.oFloorHeight) < 20.0 then
                 o.oMoveFlags = (o.oMoveFlags & ~(OBJ_MOVE_LEFT_GROUND | OBJ_MOVE_IN_AIR)) | OBJ_MOVE_ON_GROUND
                 o.oPosY = o.oFloorHeight
             else
@@ -729,7 +739,7 @@ local function bhv_wpet_loop(o)
             play_sound(SOUND_OBJ_DIVING_INTO_WATER, o.header.gfx.cameraToObject)
         end
 
-        if o.oFloor and math.abs(o.oPosY - o.oFloorHeight) <= 4.0 then
+        if o.oFloor and abs(o.oPosY - o.oFloorHeight) <= 4.0 then
             -- update position for moving platforms
             local floorObj = o.oFloor.object
             if floorObj then

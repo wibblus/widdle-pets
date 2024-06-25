@@ -38,6 +38,11 @@ local MENU_BINDS = {0, R_JPAD, Y_BUTTON, L_TRIG}
 
 local MOD_NAME = "WiddlePets v1.1"
 
+---- LOCALIZED FUNCTIONS
+
+local djui_hud_render_rect_interpolated,djui_hud_print_text_interpolated,djui_hud_render_texture_interpolated,is_game_paused,play_sound,mod_storage_save_number,djui_hud_set_resolution,djui_hud_set_font,djui_hud_set_color,djui_hud_get_screen_height,djui_hud_measure_text,min,string_find
+    = djui_hud_render_rect_interpolated,djui_hud_print_text_interpolated,djui_hud_render_texture_interpolated,is_game_paused,play_sound,mod_storage_save_number,djui_hud_set_resolution,djui_hud_set_font,djui_hud_set_color,djui_hud_get_screen_height,djui_hud_measure_text,min,string.find
+
 ---- UTIL
 
 local function render_interpolated_rect(x, y, width, height)
@@ -264,7 +269,7 @@ local function render_pet_menu()
             local desc = (petTable[menu.curPet].description or "A cool lil pet.") .. " "
             local splitIndex = 1
             while true do
-                local space = string.find(desc, ' ', splitIndex+1)
+                local space = string_find(desc, ' ', splitIndex+1)
                 if space then
                     if space > 42 then break
                     else splitIndex = space end
@@ -320,7 +325,7 @@ local function render_pet_menu()
         local desc = settings[menu.curSetting].desc .. " "
         local splitIndex = 1
         while true do
-            local space = string.find(desc, ' ', splitIndex+1)
+            local space = string_find(desc, ' ', splitIndex+1)
             if space then
                 if space > 42 then break
                 else splitIndex = space end
@@ -344,7 +349,7 @@ end
 
 hook_event(HOOK_ON_HUD_RENDER_BEHIND, function ()
     if menu.open then
-        menu.openTimer = math.min(menu.openTimer + 1, OPEN_LENGTH)
+        menu.openTimer = min(menu.openTimer + 1, OPEN_LENGTH)
         render_pet_menu()
     elseif menu.openTimer > 0 then
         menu.openTimer = menu.openTimer - 1
