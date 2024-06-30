@@ -876,6 +876,7 @@ local E_MODEL_HEADPHONE_GOOMBA = smlua_model_util_get_id('hp_goomba_geo')
 local E_MODEL_MECHAKOOPA = smlua_model_util_get_id('mechak_pet_geo')
 local E_MODEL_FLYGUY_PET = smlua_model_util_get_id('flyguy_pet_geo')
 local E_MODEL_BOBBUDDY_PET = smlua_model_util_get_id('bobbuddy_pet_geo')
+local E_MODEL_BOBBUDDY_PET2 = smlua_model_util_get_id('bobbuddy_pet2_geo')
 
 local ID_HPG = _G.wpets.add_pet({
 	name = "Headphone Goomba", credit = "wibblus",
@@ -908,9 +909,9 @@ _G.wpets.set_pet_anims(ID_MECHAK, {
 	dance = 'mechak_dance'
 })
 _G.wpets.set_pet_sounds(ID_MECHAK, {
-	spawn = SOUND_AIR_BOBOMB_LIT_FUSE,
+	spawn = {SOUND_OBJ_KING_BOBOMB_JUMP, SOUND_OBJ_BULLY_METAL},
 	happy = SOUND_OBJ_HEAVEHO_TOSSED,
-	vanish = SOUND_GENERAL2_BOBOMB_EXPLOSION,
+	vanish = SOUND_OBJ_BULLY_EXPLODE,
 	step = SOUND_AIR_HEAVEHO_MOVE
 })
 
@@ -922,7 +923,7 @@ local ID_FLYGUY = _G.wpets.add_pet({
 })
 _G.wpets.set_pet_anims_wing(ID_FLYGUY)
 _G.wpets.set_pet_sounds(ID_FLYGUY, {
-	spawn = SOUND_OBJ_SNUFIT_SKEETER_DEATH,
+	spawn = {SOUND_OBJ_SNUFIT_SKEETER_DEATH, SOUND_OBJ_SWOOP_DEATH},
 	happy = SOUND_OBJ_SNUFIT_SKEETER_DEATH
 })
 
@@ -939,11 +940,12 @@ _G.wpets.set_pet_anims(ID_BOBBUDDY, {
 	dance = 'mechak_dance'
 })
 _G.wpets.set_pet_sounds(ID_BOBBUDDY, {
-	spawn = SOUND_OBJ_BOBOMB_BUDDY_TALK, 
+	spawn = {SOUND_OBJ_BOBOMB_BUDDY_TALK, SOUND_AIR_BOBOMB_LIT_FUSE},
 	happy = SOUND_OBJ_BOBOMB_BUDDY_TALK,
 	vanish = SOUND_GENERAL2_BOBOMB_EXPLOSION,
 	step = SOUND_OBJ_BOBOMB_WALK
 })
+_G.wpets.add_pet_alt(ID_BOBBUDDY, E_MODEL_BOBBUDDY_PET2)
 
 -- required hook for sounds
 hook_event(HOOK_UPDATE, function ()
