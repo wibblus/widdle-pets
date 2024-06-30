@@ -133,9 +133,11 @@ end
 local function wpet_play_anim(o, animID)
     local anim = petTable[o.oPetIndex].animList[animID] or petTable[o.oPetIndex].animList[0]
     if anim then
+        local animInfo = o.header.gfx.animInfo
         smlua_anim_util_set_animation(o, anim)
-        o.header.gfx.animInfo.animYTrans = 1
-        o.header.gfx.animInfo.animFrame = 0
+        animInfo.animYTrans = 1
+        animInfo.animAccel = 0
+        animInfo.animFrame = animInfo.curAnim.startFrame
     elseif petTable[o.oPetIndex].animPointer then
         obj_init_animation(o, 0)
         o.header.gfx.animInfo.animFrame = 0
@@ -332,7 +334,7 @@ hook_event(HOOK_MARIO_UPDATE, mario_update)
 local function before_set_action(m, nextAct)
     if m.playerIndex ~= 0 then return end
 
-    if m.action == ACT_TELEPORT_FADE_IN then
+    if gPlayerSyncTable[0].warping and nextAct == ACT_IDLE then
         gPlayerSyncTable[0].warping = false
         spawn_player_pet(0)
     end
@@ -353,9 +355,9 @@ local interactActs = {
 
 ---@param m MarioState
 ---@param o Object
----@param type InteractionType
-local function allow_interact(m, o, type)
-    if type == INTERACT_GRABBABLE and get_id_from_behavior(o.behavior) == id_bhvWPet then
+---@param intType InteractionType
+local function allow_interact(m, o, intType)
+    if intType == INTERACT_GRABBABLE and get_id_from_behavior(o.behavior) == id_bhvWPet then
         if not interactActs[m.action] then
             if o.oAction == WPET_ACT_BOUNCE and o.oPetActTimer > 4 and m.action & (ACT_FLAG_INVULNERABLE | ACT_FLAG_INTANGIBLE | ACT_FLAG_SWIMMING) == 0 then
                 drop_and_set_mario_action(m, ACT_GROUND_BONK, 0)
@@ -395,8 +397,7 @@ end
 hook_event(HOOK_ON_WARP, on_warp)
 
 local function on_disconnect(m)
-    if m.playerIndex ~= 0 then return end
-    despawn_player_pet(0)
+    despawn_player_pet(m.playerIndex)
 end
 hook_event(HOOK_ON_PLAYER_DISCONNECTED, on_disconnect)
 
@@ -434,7 +435,7 @@ local function bhv_wpet_init(o)
     end
 
     -- default animation pointer; ensures that anims play properly
-    o.oAnimations = pet.animPointer or gObjectAnimations.amp_seg8_anims_08004034
+    o.oAnimations = pet.animPointer or nil
     obj_init_animation(o, 0)
     wpet_play_anim(o, o.oAction+1)
 
@@ -662,7 +663,7 @@ local wpet_actions = {
         else
             obj_set_model_extended(o, petTable[o.oPetIndex].modelID)
         end
-        o.oAnimations = petTable[o.oPetIndex].animPointer or gObjectAnimations.amp_seg8_anims_08004034
+        o.oAnimations = petTable[o.oPetIndex].animPointer or nil
         obj_scale(o, petTable[o.oPetIndex].scale)
 
         o.header.gfx.node.flags = o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE
@@ -795,27 +796,3 @@ local function bhv_wpet_loop(o)
     end
 end
 id_bhvWPet = hook_behavior(nil, OBJ_LIST_GENACTOR, false, bhv_wpet_init, bhv_wpet_loop, 'bhvWPet')
-
-
----- DEBUG
-
---[[
-
-debugVal = ""
-
-hook_event(HOOK_ON_HUD_RENDER, function ()
-    ---@type MarioState
-    local m = gMarioStates[0]
-    djui_hud_set_color(255, 255, 255, 255)
-    djui_hud_set_font(FONT_NORMAL)
-    --djui_hud_print_text("" .. m.actionTimer, 64, 128, 1.0)
-    local y = 128
-    --djui_hud_print_text(debugVal or "nil", 64, y, 2.0)
-    for i = 0, MAX_PLAYERS-1, 1 do
-        y = y + 48
-        if gPetSamples[i] and gPetSamples[i].sample then
-            djui_hud_print_text(i .. " : " .. (gPetSamples[i].sample.file.relativePath or ""), 32, y, 1.0)
-        end
-    end
-end)
-]]
