@@ -64,6 +64,7 @@ function wpets.set_pet_anims_head(i)
     petTable[i].animList = {'head_idle', 'head_follow', 'head_petted', 'head_dance'}
 end
 
+--[[ old function
 ---@param i integer
 ---@param sounds PetSoundList
 function wpets.set_pet_sounds(i, sounds)
@@ -71,9 +72,33 @@ function wpets.set_pet_sounds(i, sounds)
     petTable[i].soundList[2] = sounds.happy or nil
     petTable[i].soundList[3] = sounds.vanish or nil
     petTable[i].soundList[4] = sounds.step or nil
+end
+]]
 
-    -- hook sample handling; ensures that samples are loaded from the correct mod context
-    -- TODO: FUCK YOUUUUUUUUUU (edit: nevermind im so cool) (edit2: i will no longer use this hook method)
+---@param i integer
+---@param sounds PetSoundList
+function wpets.set_pet_sounds(i, sounds)
+    local pet = petTable[i]
+
+    pet.soundList[1] = sounds.spawn or nil
+    pet.soundList[2] = sounds.happy or nil
+    pet.soundList[3] = sounds.vanish or nil
+    pet.soundList[4] = sounds.step or nil
+
+    for s = 1, #pet.soundList, 1 do
+        if type(pet.soundList[s]) == 'table' then
+            for opt, sound in pairs(pet.soundList[s]) do
+                if type(sound) == 'string' then
+                    pet.soundList[s][opt] = audio_sample_load(sound)
+                end
+            end
+        else
+            local sound = pet.soundList[s]
+            if type(sound) == 'string' then
+                pet.soundList[s] = audio_sample_load(sound)
+            end
+        end
+    end
 end
 
 -- obtain a field from a pet table entry

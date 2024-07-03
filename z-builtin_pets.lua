@@ -946,9 +946,3 @@ _G.wpets.set_pet_sounds(ID_BOBBUDDY, {
 	step = SOUND_OBJ_BOBOMB_WALK
 })
 _G.wpets.add_pet_alt(ID_BOBBUDDY, E_MODEL_BOBBUDDY_PET2)
-
--- required hook for sounds
-hook_event(HOOK_UPDATE, function ()
-	-- copy this for each pet in the pack that uses samples
-    _G.wpets.process_pet_samples(ID_HPG)
-end)

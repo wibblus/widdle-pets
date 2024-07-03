@@ -1,16 +1,15 @@
 ---@diagnostic disable: undefined-field, inject-field
 -- name: WiddlePets
 -- description: lil pets to follow you while you go wahoo ! \n\n+API to make your own pets ! \n\n \\#d0a0f0\\-wibblus
--- deluxe: true
 
 ---@class Pet
 ---@field name string
 ---@field description? string
----@field modelID ModelExtendedId|integer
+---@field modelID ModelExtendedId
 ---@field flying? boolean
 ---@field animPointer? Pointer_ObjectAnimPointer
 ---@field animList? string[] idle, follow, petted, dance
----@field soundList? (integer|string|(integer|string)[])[] spawn, happy, vanish, step
+---@field soundList? (integer|string|ModAudio|(integer|string|ModAudio)[])[] spawn, happy, vanish, step
 ---@field scale? number
 ---@field yOffset? number
 ---@field credit string
@@ -164,7 +163,7 @@ local function wpet_play_sound(o, sound)
         -- 'typ' because syntax highlighting scared me :thumbsup:
         local typ = type(s)
 
-        if typ == 'table' then
+        if typ == 'table' and not s.loaded then
             -- handler for sound arrays
             s = s[random(#s)]
             typ = type(s)
@@ -173,10 +172,13 @@ local function wpet_play_sound(o, sound)
         if typ == 'number' then
             -- sound bits
             play_sound(s, o.header.gfx.cameraToObject)
-        elseif typ == 'string' then
+        elseif typ == 'table' and s.loaded then
             -- sample
-            local index = o.globalPlayerIndex
-            gPetSamples[index] = {name = s, petId = o.oPetIndex, pos = o.header.gfx.pos}
+
+            audio_sample_play(s, o.header.gfx.pos, 1.0)
+
+            --local index = o.globalPlayerIndex
+            --gPetSamples[index] = {name = s, petId = o.oPetIndex, pos = o.header.gfx.pos}
             -- the sample is readied for the hooked function to play it
         end
     end
@@ -202,11 +204,9 @@ function wpet_process_samples(i)
     for index, sample in pairs(gPetSamples) do
         -- petId is only not nil when the sample should be played
         if sample.petId == i then
-            local bass = audio_sample_load(sample.name)
-            audio_sample_play(bass, sample.pos, 1.0)
-            -- destroy the sample
+            local audio = audio_sample_load(sample.name)
+            audio_sample_play(audio, sample.pos, 1.0)
             gPetSamples[index] = nil
-            audio_sample_destroy(bass)
         end
     end
 end
@@ -306,7 +306,7 @@ local function mario_update(m)
         local o = obj_get_nearest_object_with_behavior_id(m.marioObj, id_bhvWPet)
         local dist = dist_between_objects(m.marioObj, o)
         local angleTo = obj_angle_to_object(m.marioObj, o)
-        if (m.action == ACT_IDLE or m.action == ACT_WALKING)
+        if m.action & ACT_FLAG_ALLOW_FIRST_PERSON ~= 0
         and o and o.oIntangibleTimer == 0 and dist < 150 and abs_angle_diff(m.faceAngle.y, angleTo) < 0x5000 then
             m.faceAngle.y = angleTo
             set_mario_action(m, ACT_PETTING, o.globalPlayerIndex)
@@ -435,7 +435,7 @@ local function bhv_wpet_init(o)
     end
 
     -- default animation pointer; ensures that anims play properly
-    o.oAnimations = pet.animPointer or nil
+    o.oAnimations = pet.animPointer
     obj_init_animation(o, 0)
     wpet_play_anim(o, o.oAction+1)
 
@@ -663,7 +663,7 @@ local wpet_actions = {
         else
             obj_set_model_extended(o, petTable[o.oPetIndex].modelID)
         end
-        o.oAnimations = petTable[o.oPetIndex].animPointer or nil
+        o.oAnimations = petTable[o.oPetIndex].animPointer
         obj_scale(o, petTable[o.oPetIndex].scale)
 
         o.header.gfx.node.flags = o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE
