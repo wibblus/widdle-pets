@@ -77,16 +77,16 @@ local TEX_CONTROLS = get_texture_info('menu_pad4')
 
 ---- BOOT
 
-local bootMessageSent = false
+local boot = true
 
 hook_event(HOOK_ON_LEVEL_INIT, function ()
-    if not bootMessageSent then
+    if boot then
         if petLocalSettings.menuBind == 1 then
             djui_chat_message_create(MOD_NAME .. " is active! Use '/wpets' to open the menu!")
         else
             djui_chat_message_create(MOD_NAME .. " is active! Use '/wpets' or " .. settings[3].opts[petLocalSettings.menuBind] .. " to open the menu!")
         end
-        bootMessageSent = true
+        boot = false
     end
 end)
 

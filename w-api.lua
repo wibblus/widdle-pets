@@ -1,5 +1,5 @@
-local table_insert,pairs,ipairs,type,to_lower
-    = table.insert,pairs,ipairs,type,string.lower
+local table_insert,pairs,ipairs,type,to_lower,obj_has_behavior_id,network_local_index_from_global
+    = table.insert,pairs,ipairs,type,string.lower,obj_has_behavior_id,network_local_index_from_global
 
 _G.wpets = {}
 
@@ -7,12 +7,9 @@ _G.wpets = {}
 ---@param petInfo Pet
 ---@return integer
 function wpets.add_pet(petInfo)
-    if petInfo.animList == nil then
-        petInfo.animList = {}
-    end
-    if petInfo.soundList == nil then
-        petInfo.soundList = {}
-    end
+    petInfo.animList = {}
+    petInfo.soundList = {}
+    petInfo.sampleList = {}
 
     petInfo.scale = petInfo.scale or 1.0
     petInfo.yOffset = petInfo.yOffset or 0
@@ -28,7 +25,9 @@ function wpets.edit_pet(i, petInfo)
     if not pet or not petInfo then return end
 
     for field, value in pairs(petInfo) do
-        pet[field] = value or pet[field]
+        if type(value) ~= 'table' then
+            pet[field] = value or pet[field]
+        end
     end
 end
 
@@ -85,20 +84,8 @@ function wpets.set_pet_sounds(i, sounds)
     pet.soundList[3] = sounds.vanish or nil
     pet.soundList[4] = sounds.step or nil
 
-    for s = 1, #pet.soundList, 1 do
-        if type(pet.soundList[s]) == 'table' then
-            for opt, sound in pairs(pet.soundList[s]) do
-                if type(sound) == 'string' then
-                    pet.soundList[s][opt] = audio_sample_load(sound)
-                end
-            end
-        else
-            local sound = pet.soundList[s]
-            if type(sound) == 'string' then
-                pet.soundList[s] = audio_sample_load(sound)
-            end
-        end
-    end
+    -- fill out sampleList for each string entry in soundList
+    wpet_load_samples(pet)
 end
 
 -- obtain a field from a pet table entry
@@ -107,13 +94,7 @@ end
 ---@return any
 function wpets.get_pet_field(i, field)
     local val = petTable[i][field]
-    if type(val) == 'table' then
-        local copy = {}
-        for j = 1, #val, 1 do
-            copy[j] = val[j]
-        end
-        return copy
-    end
+    if type(val) == 'table' then return end
     return val
 end
 
@@ -127,12 +108,25 @@ function wpets.get_index_from_name(name)
     return nil
 end
 
+---@param mIndex integer
+---@return integer|nil, integer|nil
+function wpets.get_active_pet_id(mIndex)
+    return gPlayerSyncTable[mIndex].activePet, gPlayerSyncTable[mIndex].activePetAlt
+end
+
+---@param o Object
+---@return integer|nil, integer|nil
+function wpets.get_obj_pet_id(o)
+    if obj_has_behavior_id(o, id_bhvWPet) == 0 then return end
+    local index = network_local_index_from_global(o.globalPlayerIndex)
+    return gPlayerSyncTable[index].activePet, gPlayerSyncTable[index].activePetAlt
+end
+
 wpets.get_pet_obj = wpet_get_obj
 wpets.spawn_pet = spawn_player_pet
 wpets.despawn_pet = despawn_player_pet
 
-wpets.process_pet_samples = wpet_process_samples
+-- deprecated
+wpets.process_pet_samples = function () end
 
 wpets.hook_allow_menu = wpet_hook_allow_menu
-
-wpets.id_bhvWPet = id_bhvWPet

@@ -9,7 +9,8 @@
 ---@field flying? boolean
 ---@field animPointer? Pointer_ObjectAnimPointer
 ---@field animList? string[] idle, follow, petted, dance
----@field soundList? (integer|string|ModAudio|(integer|string|ModAudio)[])[] spawn, happy, vanish, step
+---@field soundList? (integer|string|(integer|string)[])[] spawn, happy, vanish, step
+---@field sampleList? table<string,ModAudio> internal only
 ---@field scale? number
 ---@field yOffset? number
 ---@field credit string
@@ -26,16 +27,12 @@
 ---@field vanish? integer|string|(integer|string)[]
 ---@field step? integer|string|(integer|string)[]
 
----@class PetSample
----@field name string|nil
----@field petId integer|nil
----@field pos Vec3f|nil
-
 ---@type Object|nil
 local activePetObj
+
 -- list of sample objects, indexed by local player index
----@type table<integer,PetSample>
-local gPetSamples = {}
+--@type table<integer,PetSample>
+--local gPetSamples = {}
 
 ---@type Pet[]
 petTable = {}
@@ -81,6 +78,9 @@ petLocalSettings = {
 
 -- this setting needs to be known by other clients
 gPlayerSyncTable[0].protectPet = petLocalSettings.protectPet
+
+gPlayerSyncTable[0].activePet = nil
+gPlayerSyncTable[0].activePetAlt = 0
 
 ---- WPET BEHAVIOR SETUP
 
@@ -158,12 +158,13 @@ end
 local function wpet_play_sound(o, sound)
     if petLocalSettings.petSounds == 3 then return end
 
-    local s = petTable[o.oPetIndex].soundList[sound]
+    local pet = petTable[o.oPetIndex]
+    local s = pet.soundList[sound]
     if s then
         -- 'typ' because syntax highlighting scared me :thumbsup:
         local typ = type(s)
 
-        if typ == 'table' and not s.loaded then
+        if typ == 'table' then
             -- handler for sound arrays
             s = s[random(#s)]
             typ = type(s)
@@ -172,14 +173,12 @@ local function wpet_play_sound(o, sound)
         if typ == 'number' then
             -- sound bits
             play_sound(s, o.header.gfx.cameraToObject)
-        elseif typ == 'table' and s.loaded then
+        elseif typ == 'string' then
             -- sample
 
-            audio_sample_play(s, o.header.gfx.pos, 1.0)
-
-            --local index = o.globalPlayerIndex
-            --gPetSamples[index] = {name = s, petId = o.oPetIndex, pos = o.header.gfx.pos}
-            -- the sample is readied for the hooked function to play it
+            if pet.sampleList[s] then
+                audio_sample_play(pet.sampleList[s], o.header.gfx.pos, 1.0)
+            end
         end
     end
 end
@@ -198,6 +197,31 @@ local function wpet_step_sounds(o)
     end
 end
 
+---@param pet Pet
+function wpet_load_samples(pet)
+    for i, entry in pairs(pet.soundList) do
+        if type(entry) == 'table' then
+            -- interate through table entries
+            for opt, sound in pairs(entry) do
+                if type(sound) == 'string' then
+                    -- only load if the sampleList entry is empty or not loaded
+                    if not pet.sampleList[sound] or not pet.sampleList[sound].loaded then
+                        pet.sampleList[sound] = audio_sample_load(sound)
+                    end
+                end
+            end
+        else
+            local sound = entry
+            if type(sound) == 'string' then
+                if not pet.sampleList[sound] or not pet.sampleList[sound].loaded then
+                    pet.sampleList[sound] = audio_sample_load(sound)
+                end
+            end
+        end
+    end
+end
+
+--[[ DEPRECATED
 -- processes audio sample sound entries for a given pet. Should be called in HOOK_UPDATE.
 ---@param i integer
 function wpet_process_samples(i)
@@ -210,6 +234,7 @@ function wpet_process_samples(i)
         end
     end
 end
+]]
 
 -- returns the local player's pet object, if it exists
 function wpet_get_obj()
@@ -376,10 +401,16 @@ hook_event(HOOK_ALLOW_INTERACT, allow_interact)
 
 ---- WARP / DISCONNECT STUFF
 
-local function on_sync_valid()
-    gPlayerSyncTable[0].warping = false
+local boot = true
 
-    gPlayerSyncTable[0].activePetAlt = gPlayerSyncTable[0].activePetAlt or 0
+local function on_sync_valid()
+    if boot then
+        gPlayerSyncTable[0].activePet = nil
+        gPlayerSyncTable[0].activePetAlt = 0
+        boot = false
+    end
+
+    gPlayerSyncTable[0].warping = false
 
     ---@type MarioState
     local m = gMarioStates[0]
