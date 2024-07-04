@@ -1,6 +1,6 @@
 ---@diagnostic disable: undefined-field, inject-field
 -- name: WiddlePets
--- description: lil pets to follow you while you go wahoo ! \n\n+API to make your own pets ! \n\n \\#d0a0f0\\-wibblus
+-- description: WiddlePets v1.2 \n\nlil pets to follow you while you go wahoo ! \n\\#b0b0b0\\[use this alongside \\#ffff80\\[PET]\\#b0b0b0\\ mods!] \n\n \\#d0a0f0\\-wibblus
 
 ---@class Pet
 ---@field name string

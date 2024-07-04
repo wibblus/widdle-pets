@@ -36,7 +36,7 @@ local MENU_BUTTON_MASK = (D_JPAD | U_JPAD | R_JPAD | L_JPAD | L_TRIG | R_TRIG)
 
 local MENU_BINDS = {0, R_JPAD, Y_BUTTON, L_TRIG}
 
-local MOD_NAME = "WiddlePets v1.1"
+local MOD_NAME = "WiddlePets v1.2"
 
 ---- LOCALIZED FUNCTIONS
 

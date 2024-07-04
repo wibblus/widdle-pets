@@ -20,10 +20,3 @@ _G.wpets.set_pet_sounds(ID_WPET, {
 	vanish = nil,
 	step = SOUND_OBJ_BOBOMB_WALK
 })
-
--- required hook for samples (audio files from the mod's 'sound' folder)
--- if no pets in your pack use samples, you can remove this section.
-hook_event(HOOK_UPDATE, function ()
-	-- copy the following line for each pet in the pack that uses samples.
-    _G.wpets.process_pet_samples(ID_WPET)
-end)
