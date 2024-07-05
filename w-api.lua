@@ -1,3 +1,4 @@
+---@diagnostic disable: missing-return-value
 local table_insert,pairs,ipairs,type,to_lower,obj_has_behavior_id,network_local_index_from_global
     = table.insert,pairs,ipairs,type,string.lower,obj_has_behavior_id,network_local_index_from_global
 
@@ -7,7 +8,7 @@ wpets.version = 1.2
 
 -- registers a new pet, and returns it's ID in the pet table
 ---@param petInfo Pet
----@return integer|nil
+---@return integer
 function wpets.add_pet(petInfo)
     if not petInfo.name then djui_popup_create("A pet was failed to be added; 'name' field must be set!", 3) return end
     if not petInfo.modelID then djui_popup_create(petInfo.name .. " pet was failed to be added; 'modelID' field must be set!", 3) return end
@@ -40,7 +41,7 @@ end
 -- registers a specified model as an alt model for an existing pet
 ---@param i integer
 ---@param modelID ModelExtendedId
----@return integer|nil
+---@return integer
 function wpets.add_pet_alt(i, modelID)
     if not modelID then return end
     if petTable[i].altModels == nil then petTable[i].altModels = {} end
