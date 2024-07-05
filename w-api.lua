@@ -2,9 +2,14 @@
 local table_insert,pairs,ipairs,type,to_lower,obj_has_behavior_id,network_local_index_from_global
     = table.insert,pairs,ipairs,type,string.lower,obj_has_behavior_id,network_local_index_from_global
 
+local version = 1.2
+
 _G.wpets = {}
 
-wpets.version = 1.2
+---@return number
+function wpets.get_version()
+    return version
+end
 
 -- registers a new pet, and returns it's ID in the pet table
 ---@param petInfo Pet
