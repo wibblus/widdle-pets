@@ -44,7 +44,7 @@ local type,random_linear_offset,mario_drop_held_object,obj_become_tangible,set_m
 
 ---- SETTINGS
 
-local PET_BINDS = {0, Y_BUTTON, L_TRIG, U_JPAD}
+local PET_BINDS = {0, Y_BUTTON, X_BUTTON, U_JPAD}
 
 local function load_setting(key, opts, default)
     local setting = floor(mod_storage_load_number(key))
@@ -64,7 +64,7 @@ end
 petLocalSettings = {
     intAllowed = load_setting('intAllowed', 2, 1),
     protectPet = load_setting('protectPet', 2, 2),
-    menuBind = load_setting('menuBind', 4, 2),
+    menuBind = load_setting('menuBind', 5, 2),
     petBind = load_setting('petBind', 4, 2),
     petSounds = load_setting('petSounds', 3, 1),
     showCtrls = load_setting('showCtrls', 2, 1),

@@ -21,10 +21,10 @@ local settings = {
     opts = {'[ON]', '[OFF]'}},
 
     {key = 'menuBind', name = "Menu Bind", desc = "The button bind to open the pets menu. ('/wpets' can always be used)",
-    opts = {'[NONE]', '[DPAD-RIGHT]', '[PAUSE+Y]', '[PAUSE+L]'}},
+    opts = {'[NONE]', '[DPAD-RIGHT]', '[PAUSE+Y]', '[PAUSE+X]', '[PAUSE+L]'}},
 
     {key = 'petBind', name = "Petting Bind", desc = "The button bind to pet/warp a pet.",
-    opts = {'[NONE]', '[Y]', '[L]', '[DPAD-UP]'}},
+    opts = {'[NONE]', '[Y]', '[X]', '[DPAD-UP]'}},
 
     {key = 'petSounds', name = "Pet Sounds", desc = "Should pets make noises?",
     opts = {'[ALL]', '[NO STEPS]', '[NONE]'}},
@@ -39,7 +39,7 @@ local allowMenuHooks = {}
 local OPEN_LENGTH = 8
 local MENU_BUTTON_MASK = (D_JPAD | U_JPAD | R_JPAD | L_JPAD | L_TRIG | R_TRIG)
 
-local MENU_BINDS = {0, R_JPAD, Y_BUTTON, L_TRIG}
+local MENU_BINDS = {0, R_JPAD, Y_BUTTON, X_BUTTON, L_TRIG}
 
 local MOD_NAME = "WiddlePets v1.2"
 
