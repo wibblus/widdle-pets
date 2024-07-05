@@ -16,14 +16,19 @@ local menu = {
 local settings = {
     {key = 'intAllowed', name = "Interactions", desc = "Are you able to interact with (grab/kick) pets?",
     opts = {'[ON]', '[OFF]'}},
+
     {key = 'protectPet', name = "Protect My Pet", desc = "Protects your pet from others' interactions.", sync = true,
     opts = {'[ON]', '[OFF]'}},
+
     {key = 'menuBind', name = "Menu Bind", desc = "The button bind to open the pets menu. ('/wpets' can always be used)",
     opts = {'[NONE]', '[DPAD-RIGHT]', '[PAUSE+Y]', '[PAUSE+L]'}},
+
     {key = 'petBind', name = "Petting Bind", desc = "The button bind to pet/warp a pet.",
-    opts = {'[Y]', '[DPAD-UP]'}},
+    opts = {'[NONE]', '[Y]', '[L]', '[DPAD-UP]'}},
+
     {key = 'petSounds', name = "Pet Sounds", desc = "Should pets make noises?",
     opts = {'[ALL]', '[NO STEPS]', '[NONE]'}},
+
     {key = 'showCtrls', name = "Show Controls", desc = "Show the menu controls?",
     opts = {'[SHOW]', '[HIDE]'}}
 }
@@ -125,7 +130,7 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
 
                     -- if the selected pet is the already active pet
                     if petIndex == gPlayerSyncTable[0].activePet then
-                        local altModels = petAltModels[petIndex]
+                        local altModels = petTable[petIndex].altModels
                         if altModels then
                             -- fix nil
                             altIndex = gPlayerSyncTable[0].activePetAlt or 0
@@ -243,8 +248,8 @@ local function render_pet_menu()
             if gPlayerSyncTable[0].activePet == i then
                 djui_hud_set_color(50, 255, 50, 255)
 
-                if petAltModels[i] then
-                    render_interpolated_text((gPlayerSyncTable[0].activePetAlt+1) .. "/" .. (#petAltModels[i]+1), bgX + bgWidth - 24, y + 2, TEX_SML)
+                if petTable[i].altModels then
+                    render_interpolated_text((gPlayerSyncTable[0].activePetAlt+1) .. "/" .. (#petTable[i].altModels+1), bgX + bgWidth - 24, y + 2, TEX_SML)
                 end
             end
 

@@ -880,7 +880,7 @@ local E_MODEL_BOBBUDDY_PET2 = smlua_model_util_get_id('bobbuddy_pet2_geo')
 
 local ID_HPG = _G.wpets.add_pet({
 	name = "Headphone Goomba", credit = "wibblus",
-	description = "His tunes are the best in the mushroom kingdom.",
+	description = "His tunes are the best in the Mushroom Kingdom.",
 	modelID = E_MODEL_HEADPHONE_GOOMBA,
 	scale = 0.74, yOffset = 0
 })
@@ -898,7 +898,7 @@ _G.wpets.set_pet_sounds(ID_HPG, {
 
 local ID_MECHAK = _G.wpets.add_pet({
 	name = "Mechakoopa", credit = "wibblus",
-	description = "What an explosive friend! Up to mischief!",
+	description = "What an explosive friend! Up to such mischief!",
 	modelID = E_MODEL_MECHAKOOPA,
 	scale = 0.84
 })

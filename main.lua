@@ -6,6 +6,7 @@
 ---@field name string
 ---@field description? string
 ---@field modelID ModelExtendedId
+---@field altModels? ModelExtendedId[]
 ---@field flying? boolean
 ---@field animPointer? Pointer_ObjectAnimPointer
 ---@field animList? string[] idle, follow, petted, dance
@@ -13,7 +14,7 @@
 ---@field sampleList? table<string,ModAudio> internal only
 ---@field scale? number
 ---@field yOffset? number
----@field credit string
+---@field credit? string
 
 ---@class PetAnimList
 ---@field idle? string
@@ -30,15 +31,8 @@
 ---@type Object|nil
 local activePetObj
 
--- list of sample objects, indexed by local player index
---@type table<integer,PetSample>
---local gPetSamples = {}
-
 ---@type Pet[]
 petTable = {}
--- <pet id, table of model ids>
----@type table<integer,ModelExtendedId[]>
-petAltModels = {}
 
 local PACKET_SPAWN_PET = 1
 
@@ -50,7 +44,7 @@ local type,random_linear_offset,mario_drop_held_object,obj_become_tangible,set_m
 
 ---- SETTINGS
 
-local PET_BINDS = {Y_BUTTON, U_JPAD}
+local PET_BINDS = {0, Y_BUTTON, L_TRIG, U_JPAD}
 
 local function load_setting(key, opts, default)
     local setting = floor(mod_storage_load_number(key))
@@ -71,7 +65,7 @@ petLocalSettings = {
     intAllowed = load_setting('intAllowed', 2, 1),
     protectPet = load_setting('protectPet', 2, 2),
     menuBind = load_setting('menuBind', 4, 2),
-    petBind = load_setting('petBind', 2, 1),
+    petBind = load_setting('petBind', 4, 2),
     petSounds = load_setting('petSounds', 3, 1),
     showCtrls = load_setting('showCtrls', 2, 1),
 }
@@ -282,7 +276,7 @@ local function wpet_spawn(petIndex, altIndex)
     if not altIndex then
         altIndex = gPlayerSyncTable[0].activePetAlt or 0
     end
-    if not petAltModels[petIndex] or isPetChanged then altIndex = 0 end
+    if not pet.altModels or isPetChanged then altIndex = 0 end
     gPlayerSyncTable[0].activePetAlt = altIndex
 
     -- stop if a pet object already exists for this player
@@ -462,7 +456,7 @@ local function bhv_wpet_init(o)
 
     -- alt model handling
     if o.oPetAlt ~= 0 then
-        obj_set_model_extended(o, petAltModels[o.oPetIndex][o.oPetAlt])
+        obj_set_model_extended(o, pet.altModels[o.oPetAlt])
     end
 
     -- default animation pointer; ensures that anims play properly
@@ -688,14 +682,17 @@ local wpet_actions = {
 
         cur_obj_update_floor()
 
+        -- update for pet changes
+        local pet = petTable[o.oPetIndex]
+
         -- model handling
         if o.oPetAlt ~= 0 then
-            obj_set_model_extended(o, petAltModels[o.oPetIndex][o.oPetAlt])
+            obj_set_model_extended(o, pet.altModels[o.oPetAlt])
         else
-            obj_set_model_extended(o, petTable[o.oPetIndex].modelID)
+            obj_set_model_extended(o, pet.modelID)
         end
-        o.oAnimations = petTable[o.oPetIndex].animPointer
-        obj_scale(o, petTable[o.oPetIndex].scale)
+        o.oAnimations = pet.animPointer
+        obj_scale(o, pet.scale)
 
         o.header.gfx.node.flags = o.header.gfx.node.flags & ~GRAPH_RENDER_INVISIBLE
         cur_obj_become_tangible()

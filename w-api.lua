@@ -3,16 +3,22 @@ local table_insert,pairs,ipairs,type,to_lower,obj_has_behavior_id,network_local_
 
 _G.wpets = {}
 
+wpets.version = 1.2
+
 -- registers a new pet, and returns it's ID in the pet table
 ---@param petInfo Pet
----@return integer
+---@return integer|nil
 function wpets.add_pet(petInfo)
+    if not petInfo.name then djui_popup_create("A pet was failed to be added; 'name' field must be set!", 3) return end
+    if not petInfo.modelID then djui_popup_create(petInfo.name .. " pet was failed to be added; 'modelID' field must be set!", 3) return end
+
+    petInfo.scale = petInfo.scale or 1.0
+    petInfo.yOffset = petInfo.yOffset or 0
+
     petInfo.animList = {}
     petInfo.soundList = {}
     petInfo.sampleList = {}
 
-    petInfo.scale = petInfo.scale or 1.0
-    petInfo.yOffset = petInfo.yOffset or 0
     table_insert(petTable, petInfo)
     return #petTable
 end
@@ -33,12 +39,13 @@ end
 
 -- registers a specified model as an alt model for an existing pet
 ---@param i integer
----@param modelID integer|ModelExtendedId
----@return integer
+---@param modelID ModelExtendedId
+---@return integer|nil
 function wpets.add_pet_alt(i, modelID)
-    if petAltModels[i] == nil then petAltModels[i] = {} end
-    table_insert(petAltModels[i], modelID)
-    return #petAltModels[i]
+    if not modelID then return end
+    if petTable[i].altModels == nil then petTable[i].altModels = {} end
+    table_insert(petTable[i].altModels, modelID)
+    return #petTable[i].altModels
 end
 
 ---@param i integer
@@ -62,17 +69,6 @@ end
 function wpets.set_pet_anims_head(i)
     petTable[i].animList = {'head_idle', 'head_follow', 'head_petted', 'head_dance'}
 end
-
---[[ old function
----@param i integer
----@param sounds PetSoundList
-function wpets.set_pet_sounds(i, sounds)
-    petTable[i].soundList[1] = sounds.spawn or nil
-    petTable[i].soundList[2] = sounds.happy or nil
-    petTable[i].soundList[3] = sounds.vanish or nil
-    petTable[i].soundList[4] = sounds.step or nil
-end
-]]
 
 ---@param i integer
 ---@param sounds PetSoundList
