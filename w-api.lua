@@ -101,23 +101,23 @@ function wpets.get_pet_field(i, field)
 end
 
 ---@param name string
----@return integer|nil
+---@return integer
 function wpets.get_index_from_name(name)
-    if type(name) ~= 'string' then return nil end
+    if type(name) ~= 'string' then return end
     for i, pet in ipairs(petTable) do
         if to_lower(pet.name) == to_lower(name) then return i end
     end
-    return nil
+    return
 end
 
 ---@param mIndex integer
----@return integer|nil, integer|nil
+---@return integer, integer
 function wpets.get_active_pet_id(mIndex)
     return gPlayerSyncTable[mIndex].activePet, gPlayerSyncTable[mIndex].activePetAlt
 end
 
 ---@param o Object
----@return integer|nil, integer|nil
+---@return integer, integer
 function wpets.get_obj_pet_id(o)
     if obj_has_behavior_id(o, id_bhvWPet) == 0 then return end
     local index = network_local_index_from_global(o.globalPlayerIndex)
