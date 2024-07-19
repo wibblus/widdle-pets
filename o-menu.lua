@@ -60,7 +60,7 @@ local function render_interpolated_texture(texInfo, x, y, scaleW, scaleH)
     djui_hud_render_texture_interpolated(texInfo, x - menu.interpX, y, scaleW, scaleH, x, y, scaleW, scaleH)
 end
 
-local function open_pet_menu()
+function open_pet_menu()
     for i = 1, #allowMenuHooks, 1 do
         if allowMenuHooks[i]() == false then return end
     end
@@ -71,6 +71,16 @@ local function open_pet_menu()
 
     menu.open = true
     play_sound(SOUND_MENU_CAMERA_ZOOM_IN, gGlobalSoundSource)
+end
+
+function close_pet_menu()
+    menu.open = false
+    play_sound(SOUND_MENU_CAMERA_ZOOM_OUT, gGlobalSoundSource)
+end
+
+---@return boolean
+function is_pet_menu_opened()
+    return menu.open
 end
 
 ---- TEXTURES
@@ -101,7 +111,7 @@ end)
 hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
     if m.playerIndex ~= 0 then return end
 
-    if menu.open then
+    if is_pet_menu_opened() then
         -- calculate buttonPressed based on the recorded buttonDown value
         local buttonPressed = (menu.buttonDown ~ m.controller.buttonDown) & m.controller.buttonDown
         -- update recorded buttonDown
@@ -119,9 +129,8 @@ hook_event(HOOK_BEFORE_MARIO_UPDATE, function (m)
         if buttonPressed ~= 0 then
             if buttonPressed & (L_JPAD | START_BUTTON) ~= 0 then
                 -- exit
-                menu.open = false
+                close_pet_menu()
                 if buttonPressed & START_BUTTON ~= 0 then menu.openTimer = 0 end
-                play_sound(SOUND_MENU_CAMERA_ZOOM_OUT, gGlobalSoundSource)
             elseif buttonPressed & R_JPAD ~= 0 then
                 -- select
                 if menu.curTab == 0 then
@@ -353,7 +362,7 @@ local function render_pet_menu()
 end
 
 hook_event(HOOK_ON_HUD_RENDER_BEHIND, function ()
-    if menu.open then
+    if is_pet_menu_opened() then
         menu.openTimer = min(menu.openTimer + 1, OPEN_LENGTH)
         render_pet_menu()
     elseif menu.openTimer > 0 then
@@ -393,7 +402,7 @@ hook_chat_command('wpets', " [list/clear/pet_name]", function (msg)
             end
         end
 
-    elseif not menu.open then
+    elseif not is_pet_menu_opened() then
         open_pet_menu()
         return true
     end
@@ -411,7 +420,7 @@ end
 if _G.charSelectExists then
     -- do not allow CS menu to open while in pet menu
     _G.charSelect.hook_allow_menu_open(function ()
-        if menu.open then return false end
+        if is_pet_menu_opened() then return false end
         return true
     end)
 end

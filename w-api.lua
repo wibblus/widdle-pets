@@ -124,6 +124,9 @@ function wpets.get_obj_pet_id(o)
     return gPlayerSyncTable[index].activePet, gPlayerSyncTable[index].activePetAlt
 end
 
+wpets.is_menu_opened = is_pet_menu_opened
+wpets.open_menu = open_pet_menu
+wpets.close_menu = close_pet_menu
 wpets.get_pet_obj = wpet_get_obj
 wpets.spawn_pet = spawn_player_pet
 wpets.despawn_pet = despawn_player_pet
